@@ -37,8 +37,8 @@ server {
     listen [::]:443 ssl default_server;
     server_name _;
 
-    ssl_certificate /etc/letsencrypt/live/3.148.240.163/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/3.148.240.163/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/hermes-route/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/hermes-route/privkey.pem;
 
     root /srv/hermes-route/site;
     index index.html index.htm;

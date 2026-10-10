@@ -3,15 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
   <title>P2P Chat</title>
 </head>
 <body>
-  <p>Invite link: <input id="link" size="60" readonly>
+  <p>Invite link (contains a secret, so share it privately):<br>
+     <input id="link" size="70" readonly>
      <button id="copy">Copy</button></p>
-  <p id="status">Connecting to server...</p>
-  <input id="msg" placeholder="Message">
-  <button id="send" disabled>Send</button>
+  <p id="status">Starting...</p>
+  <p id="alert" hidden></p>
+  <p><input id="msg" placeholder="Message" maxlength="2000" autocomplete="off">
+     <button id="send" disabled>Send</button></p>
   <pre id="log"></pre>
-  <script src="/p2p/script.js"></script>
+  <p><a href="/p2p/">Start a new chat</a></p>
+  <script src="/p2p/script.js" defer></script>
 </body>
 </html>
