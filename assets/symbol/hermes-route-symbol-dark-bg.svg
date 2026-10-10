@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Hermes Route symbol">
+<title>Hermes Route symbol</title>
+<rect width="512" height="512" fill="#111820"/>
+<path d="M163.54,362.62 C235.75,362.62 345.78,375.00 428.31,344.74" fill="none" stroke="#E6EDF0" stroke-width="10.32" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M183.90,362.88 L187.61,275.28" fill="none" stroke="#E6EDF0" stroke-width="10.32" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M187.61,275.28 L270.13,275.28" fill="none" stroke="#E6EDF0" stroke-width="10.32" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M270.13,275.28 C294.20,293.85 325.15,315.85 354.03,321.36" fill="none" stroke="#E6EDF0" stroke-width="10.32" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M270.13,275.28 C275.63,306.23 278.39,340.61 269.70,365.09" fill="none" stroke="#E6EDF0" stroke-width="10.32" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M314.61,364.38 C321.02,340.61 334.78,321.36 354.03,321.36 C376.04,321.36 392.55,337.86 398.84,353.57" fill="none" stroke="#E6EDF0" stroke-width="10.32" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M291.11,254.65 C279.26,190.16 225.10,143.20 162.16,142.85 C202.51,163.73 246.27,210.69 266.35,254.65 Z" fill="none" stroke="#2FD0BC" stroke-width="10.32" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M236.43,254.65 C215.33,200.01 160.00,167.79 104.70,177.92 C142.90,188.50 188.70,220.73 213.74,254.65 Z" fill="none" stroke="#2FD0BC" stroke-width="10.32" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M183.82,254.65 C160.77,217.87 115.97,202.21 77.16,217.38 C105.26,219.11 141.83,234.76 164.22,254.65 Z" fill="none" stroke="#2FD0BC" stroke-width="10.32" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M175.23,362.62 C175.23,369.08 169.99,374.31 163.54,374.31 C157.08,374.31 151.84,369.08 151.84,362.62 C151.84,356.16 157.08,350.93 163.54,350.93 C169.99,350.93 175.23,356.16 175.23,362.62 Z" fill="#2FD0BC"/>
+<path d="M440.00,344.74 C440.00,351.19 434.77,356.43 428.31,356.43 C421.85,356.43 416.62,351.19 416.62,344.74 C416.62,338.28 421.85,333.05 428.31,333.05 C434.77,333.05 440.00,338.28 440.00,344.74 Z" fill="#2FD0BC"/>
+</svg>

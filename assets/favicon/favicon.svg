@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Hermes Route">
+<title>Hermes Route</title>
+<rect width="512" height="512" rx="112" fill="#111820"/>
+<path d="M168.71,374.70 C243.93,374.70 358.55,387.60 444.51,356.08" fill="none" stroke="#E6EDF0" stroke-width="21.49" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M189.93,374.97 L193.79,283.73" fill="none" stroke="#E6EDF0" stroke-width="21.49" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M193.79,283.73 L279.75,283.73" fill="none" stroke="#E6EDF0" stroke-width="21.49" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M279.75,283.73 C304.82,303.07 337.06,325.99 367.14,331.72" fill="none" stroke="#E6EDF0" stroke-width="21.49" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M326.08,376.53 C332.76,351.78 347.09,331.72 367.14,331.72 C390.07,331.72 407.26,348.91 413.82,365.28" fill="none" stroke="#E6EDF0" stroke-width="21.49" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M297.23,258.65 C282.08,176.26 212.88,116.26 132.47,115.81 C184.03,142.49 239.94,202.49 265.59,258.65 Z" fill="#2FD0BC"/>
+<path d="M245.82,258.65 C216.64,187.08 142.85,145.90 70.12,160.62 C121.00,173.40 182.62,214.57 216.82,258.65 Z" fill="#2FD0BC"/>
+<path d="M197.05,258.65 C163.16,208.12 99.72,188.12 46.00,211.04 C86.04,211.77 138.97,231.77 172.01,258.65 Z" fill="#2FD0BC"/>
+<path d="M190.20,374.70 C190.20,386.57 180.58,396.19 168.71,396.19 C156.85,396.19 147.22,386.57 147.22,374.70 C147.22,362.83 156.85,353.21 168.71,353.21 C180.58,353.21 190.20,362.83 190.20,374.70 Z" fill="#2FD0BC"/>
+<path d="M466.00,356.08 C466.00,367.95 456.38,377.57 444.51,377.57 C432.64,377.57 423.02,367.95 423.02,356.08 C423.02,344.21 432.64,334.59 444.51,334.59 C456.38,334.59 466.00,344.21 466.00,356.08 Z" fill="#2FD0BC"/>
+</svg>
