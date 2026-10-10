@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 User=ubuntu
-WorkingDirectory=/home/ubuntu/signal
+WorkingDirectory=/srv/hermes-route/signal
 ExecStart=/usr/bin/node server.js
 Restart=always
 

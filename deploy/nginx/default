@@ -40,7 +40,7 @@ server {
     ssl_certificate /etc/letsencrypt/live/3.148.240.163/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/3.148.240.163/privkey.pem;
 
-    root /var/www/hermes-route;
+    root /srv/hermes-route/site;
     index index.html index.htm;
     include snippets/ws.conf;
 
