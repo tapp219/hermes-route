@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Hermes Route: private two-person chat. Messages are deleted when the session ends." />
+    <meta name="referrer" content="no-referrer" />
+    <title>Hermes Route</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Sets the theme before first paint to avoid a flash. Mirrors src/hooks/useTheme.ts -->
+    <script>
+      (function () {
+        var theme = "light";
+        try {
+          var s = localStorage.getItem("hermes-route-theme");
+          if (s === "light" || s === "dark") theme = s;
+          else if (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) theme = "dark";
+        } catch (e) {}
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-FPlnAZBd.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CWEymt2K.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
