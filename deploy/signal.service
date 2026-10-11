@@ -7,7 +7,12 @@ User=ubuntu
 WorkingDirectory=/srv/hermes-route/signal
 # The relay secret, when deploy/setup.sh has set up a relay on this server (the - makes it optional)
 EnvironmentFile=-/etc/hermes-route/turn.env
-ExecStart=/usr/bin/node server.js
+# The list of rooms, kept across restarts. systemd creates /var/lib/hermes-route, owned by the user above.
+StateDirectory=hermes-route
+StateDirectoryMode=0700
+Environment=P2P_DB=/var/lib/hermes-route/rooms.db
+# Node's built-in SQLite still prints an "experimental" notice on Node 22; this keeps it out of the log
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning server.js
 Restart=always
 
 [Install]

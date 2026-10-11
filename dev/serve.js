@@ -9,8 +9,9 @@
 //
 //   node dev/serve.js        then open http://localhost:8080/p2p/
 //
-// Optional environment variables: PORT (the site, default 8080) and P2P_PORT (the
-// signaling server, default 9000).
+// Optional environment variables: PORT (the site, default 8080), P2P_PORT (the signaling
+// server, default 9000) and P2P_DB (where the signaling server keeps its list of rooms,
+// default signal/data/rooms.db).
 //
 // Only reachable from this computer: browsers allow the chat's crypto and storage on
 // HTTPS or on localhost, so another device on the network could not use a plain-HTTP copy.
@@ -44,7 +45,7 @@ const chatHeaders = [...fs.readFileSync(path.join(repoDir, "deploy/nginx/ws.conf
 
 // ---------- The signaling server ----------
 let stopping = false;
-const signal = spawn(process.execPath, ["server.js"], {
+const signal = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "server.js"], {
   cwd: signalDir,
   stdio: "inherit",
   env: { ...process.env, P2P_HOST: "127.0.0.1", P2P_PORT: String(P2P_PORT) },

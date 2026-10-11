@@ -1,6 +1,8 @@
 "use strict";
 const { WebSocketServer } = require("ws");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 
 // ---------- Settings (the P2P_* ones can be overridden with environment variables) ----------
 const envNum = (name, fallback) => {
@@ -13,7 +15,13 @@ const PORT = envNum("P2P_PORT", 9000);
 // allowed (see originAllowed), whatever its address is. List any other origins in
 // P2P_ORIGINS, comma-separated, e.g. "https://example.com,https://www.example.com".
 const EXTRA_ORIGINS = (process.env.P2P_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
-const ROOM_TTL_MS = 60 * 60 * 1000;   // delete a room after 1 hour with nobody connected
+const ROOM_TTL_MS = envNum("P2P_ROOM_TTL_S", 60 * 60) * 1000;   // delete a room after 1 hour with nobody connected
+const SWEEP_MS = Math.min(60 * 1000, ROOM_TTL_MS / 2);           // how often expired rooms are looked for
+// Where the list of rooms is kept on disk, so that restarting this server doesn't end every chat.
+// ":memory:" keeps it in memory only (rooms are then forgotten on restart).
+const DB_PATH = process.env.P2P_DB || path.join(__dirname, "data", "rooms.db");
+// A room whose hour ran out while the server was off gets this long after startup for someone to come back
+const STARTUP_GRACE_MS = Math.min(5 * 60 * 1000, ROOM_TTL_MS);
 const MAX_ROOMS = 5000;
 // Everyone on the same wifi shares one public IP, so keep this well above "one person's tabs"
 const MAX_CONNS_PER_IP = envNum("P2P_MAX_CONNS_PER_IP", 100);
@@ -26,9 +34,68 @@ const TURN_SECRET = process.env.P2P_TURN_SECRET || "";
 const TURN_PORT = envNum("P2P_TURN_PORT", 3478);
 const TURN_TTL_S = envNum("P2P_TURN_TTL_S", 12 * 60 * 60);   // how long a relay login stays valid
 
-// roomId -> { slots: [pubKeyA, pubKeyB], sockets: [wsA, wsB], lastActive }
+// roomId -> { id, slots: [pubKeyA, pubKeyB], sockets: [wsA, wsB], lastActive, dirty }
+// This map is what the server works from. The database below is its copy on disk: the room's id,
+// its two public keys and when it was last active. Nothing about who connected or what was said.
 const rooms = new Map();
 const connsPerIp = new Map();
+
+// ---------- Rooms on disk (SQLite, built into Node 22.13 and later) ----------
+let db = null, saveStmt = null, touchStmt = null, deleteStmt = null;
+try {
+  const { DatabaseSync } = require("node:sqlite");
+  if (DB_PATH !== ":memory:") fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+  db = new DatabaseSync(DB_PATH);
+  db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");   // quick writes that still survive a crash
+  db.exec(`CREATE TABLE IF NOT EXISTS rooms (
+    id TEXT PRIMARY KEY,
+    slot0 TEXT,
+    slot1 TEXT,
+    last_active INTEGER NOT NULL
+  )`);
+  saveStmt = db.prepare(`INSERT INTO rooms (id, slot0, slot1, last_active) VALUES (?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET slot0 = excluded.slot0, slot1 = excluded.slot1, last_active = excluded.last_active`);
+  touchStmt = db.prepare("UPDATE rooms SET last_active = ? WHERE id = ?");
+  deleteStmt = db.prepare("DELETE FROM rooms WHERE id = ?");
+
+  // Pick up where the last run left off. Time the server spent switched off shouldn't end a chat by
+  // itself, so a room that is already past its hour is given a few minutes for its people to reconnect.
+  const now = Date.now();
+  for (const row of db.prepare("SELECT id, slot0, slot1, last_active FROM rooms").all()) {
+    rooms.set(row.id, {
+      id: row.id,
+      slots: [row.slot0, row.slot1],
+      sockets: [null, null],
+      lastActive: Math.max(Number(row.last_active), now - ROOM_TTL_MS + STARTUP_GRACE_MS),
+      dirty: false,
+    });
+  }
+} catch (err) {
+  // Keep serving chats from memory, as before, rather than not at all
+  console.error(`Room database unavailable (${err.message}); rooms will not survive a restart.`);
+  db = null;
+}
+
+// A failed write must never take the chat down with it
+function dbRun(what, fn) {
+  if (!db) return;
+  try { fn(); } catch (err) { console.error(`Room database: could not ${what} (${err.message})`); }
+}
+// Written straight away: a new room, or a room's second person claiming their place
+const saveRoom = (room) => dbRun("save a room", () => saveStmt.run(room.id, room.slots[0], room.slots[1], room.lastActive));
+// "Last active" changes with every message, so it is only marked here and written out in batches
+const touchRoom = (room) => { room.lastActive = Date.now(); room.dirty = true; };
+function flushRooms() {
+  dbRun("save room activity", () => {
+    const dirty = [...rooms.values()].filter((r) => r.dirty);
+    if (!dirty.length) return;
+    db.exec("BEGIN");
+    try {
+      for (const room of dirty) { touchStmt.run(room.lastActive, room.id); room.dirty = false; }
+      db.exec("COMMIT");
+    } catch (err) { db.exec("ROLLBACK"); throw err; }
+  });
+}
 
 const wss = new WebSocketServer({ host: HOST, port: PORT, maxPayload: 64 * 1024 });
 
@@ -160,7 +227,7 @@ wss.on("connection", (ws, req) => {
         if (!room) {
           if (!p.create) return reject(ws, "unknown-room");
           if (rooms.size >= MAX_ROOMS) return reject(ws, "busy");
-          room = { slots: [null, null], sockets: [null, null], lastActive: Date.now() };
+          room = { id: p.room, slots: [null, null], sockets: [null, null], lastActive: Date.now(), dirty: false };
           rooms.set(p.room, room);
         }
 
@@ -170,6 +237,8 @@ wss.on("connection", (ws, req) => {
           slot = room.slots.indexOf(null);
           if (slot === -1) return reject(ws, "sealed");
           room.slots[slot] = p.pub;
+          room.lastActive = Date.now();
+          saveRoom(room);   // on disk before the browser is told it has joined
         }
 
         // Same identity connecting again (reconnect, or second tab): replace the old socket
@@ -185,7 +254,7 @@ wss.on("connection", (ws, req) => {
         ws.room = room;
         ws.slot = slot;
         room.sockets[slot] = ws;
-        room.lastActive = Date.now();
+        touchRoom(room);
 
         const other = room.sockets[1 - slot];
         // Only a browser that has proved its identity for this room gets a relay login
@@ -198,7 +267,7 @@ wss.on("connection", (ws, req) => {
       case "offer":
       case "answer": {
         if (!isCurrent(ws)) return;
-        ws.room.lastActive = Date.now();
+        touchRoom(ws.room);
         const env = cleanEnvelope(msg.env);
         const other = ws.room.sockets[1 - ws.slot];
         if (env && other) send(other, { type: msg.type, env });
@@ -207,14 +276,14 @@ wss.on("connection", (ws, req) => {
 
       case "request-offer": {
         if (!isCurrent(ws)) return;
-        ws.room.lastActive = Date.now();
+        touchRoom(ws.room);
         const other = ws.room.sockets[1 - ws.slot];
         if (other) send(other, { type: "request-offer" });
         return;
       }
 
       case "ping": {
-        if (isCurrent(ws)) ws.room.lastActive = Date.now();
+        if (isCurrent(ws)) touchRoom(ws.room);
         return;
       }
     }
@@ -228,7 +297,7 @@ wss.on("connection", (ws, req) => {
     if (isCurrent(ws)) {
       const room = ws.room;
       room.sockets[ws.slot] = null;
-      room.lastActive = Date.now();
+      touchRoom(room);
       const other = room.sockets[1 - ws.slot];
       if (other) send(other, { type: "peer-offline" });
     }
@@ -247,12 +316,29 @@ setInterval(() => {
 // Reset per-socket message counters
 setInterval(() => { for (const ws of wss.clients) ws.msgCount = 0; }, 10 * 1000);
 
-// Delete rooms that have had nobody connected for ROOM_TTL_MS
+// Delete rooms that have had nobody connected for ROOM_TTL_MS, from memory and from disk,
+// and write out the activity times that changed since last time
 setInterval(() => {
   const now = Date.now();
   for (const [id, room] of rooms) {
-    if (!room.sockets[0] && !room.sockets[1] && now - room.lastActive > ROOM_TTL_MS) rooms.delete(id);
+    if (!room.sockets[0] && !room.sockets[1] && now - room.lastActive > ROOM_TTL_MS) {
+      rooms.delete(id);
+      dbRun("delete an expired room", () => deleteStmt.run(id));
+    }
   }
-}, 60 * 1000);
+  flushRooms();
+}, SWEEP_MS);
 
-console.log(`Signaling on ${HOST}:${PORT} (relay logins ${TURN_SECRET ? "on" : "off"})`);
+// Being stopped or restarted (systemd sends SIGTERM): save the latest activity times first
+function shutdown() {
+  flushRooms();
+  dbRun("close", () => db.close());
+  process.exit(0);
+}
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
+
+wss.on("listening", () => {
+  console.log(`Signaling on ${HOST}:${PORT} (relay logins ${TURN_SECRET ? "on" : "off"}; ` +
+    (db ? `${rooms.size} room(s) restored from ${DB_PATH}` : "rooms kept in memory only") + ")");
+});
