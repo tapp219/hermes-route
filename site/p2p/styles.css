@@ -402,9 +402,10 @@ button:focus-visible, a:focus-visible {
 }
 
 .message-row {
-    /*One chat message: name on the left, text in the middle, the time it was sent on the right*/
+    /*One chat message: name on the left, text in the middle, the time it was sent on the right.
+      The name gets at most about a third of the width; a longer one wraps onto more lines*/
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: fit-content(35%) 1fr auto;
     gap: 8px;
     align-items: start;
     padding: 3px 0;
@@ -418,7 +419,8 @@ button:focus-visible, a:focus-visible {
 
 .message-name {
     font-weight: bold;
-    white-space: nowrap;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .message-text {
@@ -456,6 +458,15 @@ button:focus-visible, a:focus-visible {
     max-height: 320px;
     margin: 2px 0 8px;
     border-radius: 6px;
+}
+
+video.file-preview {
+    /*A video's box is as wide as there is room for, whatever shape the video is, so its controls always fit.
+      script.js sets the box's shape once the video's own is known*/
+    width: 100%;
+    max-width: 480px;
+    aspect-ratio: 16 / 9;
+    background-color: #000000;
 }
 
 .file-open {
@@ -513,6 +524,7 @@ button:focus-visible, a:focus-visible {
     font-size: 15px;
     font-weight: 700;
     text-decoration: none;
+    white-space: nowrap;
 }
 
 .file-progress {
@@ -555,6 +567,24 @@ button:focus-visible, a:focus-visible {
     .invite-row {
         /*The link above a full-width Copy button*/
         flex-direction: column;
+    }
+}
+
+@media (max-width: 700px) {
+    /*Not much width (a phone, upright or a small one sideways): a file gets the full width of the chat,
+      with the name and the time on one line and the file under them. Between the two there isn't room
+      for a video's or a sound's controls*/
+    .file-row .message-file {
+        grid-column: 1 / -1;
+        grid-row: 2;
+    }
+
+    .file-row .message-time {
+        grid-column: 3;
+    }
+
+    .file-audio {
+        max-width: none;
     }
 }
 
@@ -666,5 +696,93 @@ button:focus-visible, a:focus-visible {
 
     .top-buttons {
         gap: 8px;
+    }
+}
+
+@media (max-height: 520px) and (min-width: 601px) {
+    /*Phone held sideways: wide but short. The invite goes down the right-hand side, as on a big screen,
+      and everything is trimmed in height so the whole page fits without scrolling*/
+    main {
+        gap: 8px;
+        min-height: 0;
+        padding: 8px 14px 10px;
+    }
+
+    .brand {
+        height: 32px;
+    }
+
+    .columns {
+        flex-direction: row-reverse;
+        gap: 14px;
+    }
+
+    .chat-column {
+        gap: 8px;
+    }
+
+    .invite-container {
+        display: block;
+        flex: none;
+        width: 200px;
+        min-height: 0;
+        overflow-y: auto;
+    }
+
+    .qr-code {
+        width: 118px;
+        margin: 0 auto;
+    }
+
+    .invite-details {
+        margin-top: 6px;
+    }
+
+    .invite-title {
+        font-size: 18px;
+    }
+
+    .invite-label, .invite-joined {
+        font-size: 14px;
+    }
+
+    .invite-row {
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 6px;
+    }
+
+    .invite-link {
+        flex: none;
+        padding: 3px 8px;
+        font-size: 14px;
+    }
+
+    .status-line {
+        font-size: 15px;
+    }
+
+    /*Attach and Send side by side, so the typing box can be one button tall*/
+    .second-textbox {
+        height: 56px;
+        padding: 8px 12px;
+        padding-right: 190px;
+    }
+
+    .send-button, .attach-button {
+        top: auto;
+        bottom: 10px;
+    }
+
+    .send-button {
+        right: 10px;
+    }
+
+    .attach-button {
+        right: 98px;
+    }
+
+    .file-preview {
+        max-height: 200px;
     }
 }

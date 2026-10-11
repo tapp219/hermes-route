@@ -264,7 +264,7 @@
   function addMessage(m) {   // m: { id, mine, clock, ts, and either text or file }
     m.rank = (rec.pub < rec.peerPub) === m.mine ? 0 : 1;
     const messageElement = document.createElement("div");
-    messageElement.className = m.mine ? "message-row" : "message-row other-user";
+    messageElement.className = (m.mine ? "message-row" : "message-row other-user") + (m.file ? " file-row" : "");
     m.nameSpan = document.createElement("span");
     m.nameSpan.className = "message-name";
     m.nameSpan.textContent = nameFor(m.mine);
@@ -406,7 +406,14 @@
         shown.addEventListener("click", () => openViewer(m, url));
       } else { el.controls = true; el.preload = "metadata"; }
       // Its height is only known once it has loaded: keep the newest message in view
-      el.addEventListener(kind === "img" ? "load" : "loadedmetadata", () => { tidyInvite(); if (stay) scrollToBottom(); });
+      el.addEventListener(kind === "img" ? "load" : "loadedmetadata", () => {
+        // A video's box always spans the width there is, so the browser has room for all of its controls.
+        // The box takes the video's own shape when that is wider than tall; an upright video sits in a
+        // square box with black at the sides, instead of in a strip too narrow for the controls.
+        if (kind === "video" && el.videoWidth && el.videoHeight) el.style.aspectRatio = String(Math.min(Math.max(el.videoWidth / el.videoHeight, 1), 3));
+        tidyInvite();
+        if (stay) scrollToBottom();
+      });
       el.addEventListener("error", () => shown.remove());   // not something this browser can show: Download is enough
       el.src = url;
       m.fileBox.prepend(shown);
