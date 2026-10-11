@@ -1,0 +1,52 @@
+# Relay (TURN) server config for Hermes Route.
+#
+# This is a template. deploy/turn/write-config.sh fills in the @...@ values and writes
+# /etc/turnserver.conf every time the coturn service starts, so the addresses are always
+# the server's current ones. Edit this file, not /etc/turnserver.conf.
+#
+# Ports that must be open to the internet (on AWS: the instance's security group):
+#   3478 UDP and TCP          browsers reach the relay here
+#   49160-49359 UDP           one port per relayed connection
+
+listening-port=3478
+min-port=49160
+max-port=49359
+
+# This server's own address, and how the outside world sees it
+relay-ip=@PRIVATE_IP@
+@EXTERNAL_IP_LINE@
+
+# Logins: the signaling server hands each browser a short-lived username and password
+# derived from this shared secret (kept in /etc/hermes-route/turn.env, never in the repo)
+use-auth-secret
+static-auth-secret=@SECRET@
+realm=hermes-route
+
+# Limits, so the relay can't be used as a free general-purpose proxy
+total-quota=200
+user-quota=20
+max-bps=250000
+stale-nonce=600
+
+# Never relay to private or internal addresses (other machines in the cloud network,
+# the cloud metadata service, this machine itself)
+no-multicast-peers
+denied-peer-ip=0.0.0.0-0.255.255.255
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=100.64.0.0-100.127.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+denied-peer-ip=169.254.0.0-169.254.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+denied-peer-ip=::1
+denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+
+# No admin console, no TLS listener (nginx owns 443), log to the system journal
+no-cli
+no-tls
+no-dtls
+fingerprint
+no-software-attribute
+log-file=stdout
+simple-log

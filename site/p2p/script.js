@@ -19,13 +19,15 @@
   $("link").value = location.href;
   $("copy").onclick = () => navigator.clipboard.writeText(location.href).then(() => setStatus("Link copied."), () => {});
 
-  const rtcConfig = {
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      // Add a TURN (relay) server here once coturn is set up (location.hostname is this site's address):
-      // { urls: `turn:${location.hostname}:3478`, username: "...", credential: "..." },
-    ],
-  };
+  const stunServers = [{ urls: "stun:stun.l.google.com:19302" }];
+  // Filled in by the server when it has a relay: used only if no direct route works
+  let relayServers = [];
+  // Opening the link with ?relay=only sends everything through the relay, to check the relay itself
+  const relayOnly = new URLSearchParams(location.search).get("relay") === "only";
+  const rtcConfig = () => ({
+    iceServers: [...stunServers, ...relayServers],
+    iceTransportPolicy: relayOnly ? "relay" : "all",
+  });
 
   let ws = null, pc = null, channel = null;
   let remoteSet = false, pendingCandidates = [];
@@ -38,7 +40,7 @@
   function describeCandidate(line) {
     const p = String(line).split(" ");
     const [proto, addr, port, type] = [String(p[2]).toLowerCase(), p[4] || "", p[5], p[7]];
-    const what = { host: "this device's local address", srflx: "public address", prflx: "public address (discovered)", relay: "relay" }[type] || type;
+    const what = { host: "this device's local address", srflx: "public address", prflx: "public address (discovered)", relay: "relay address" }[type] || type;
     if (addr.endsWith(".local")) return `${what}, hidden (only works on the same network) [${proto}]`;
     return `${what} ${addr.includes(":") ? "[" + addr + "]" : addr}:${port} [${proto}]`;
   }
@@ -57,9 +59,40 @@
     } catch { return ""; }
   }
 
+  // Which kind of route the connection ended up on: "direct", "relay", or "" if not known
+  async function routeInUse() {
+    if (!pc) return "";
+    try {
+      const stats = await pc.getStats();
+      let pair = null;
+      stats.forEach((s) => { if (s.type === "transport" && s.selectedCandidatePairId) pair = stats.get(s.selectedCandidatePairId) || pair; });
+      if (!pair) stats.forEach((s) => { if (!pair && s.type === "candidate-pair" && (s.selected || (s.nominated && s.state === "succeeded"))) pair = s; });
+      if (!pair) return "";
+      const kinds = [stats.get(pair.localCandidateId), stats.get(pair.remoteCandidateId)].map((c) => (c ? c.candidateType : ""));
+      return kinds.includes("relay") ? "relay" : "direct";
+    } catch { return ""; }
+  }
+
+  async function showConnected() {
+    if (!pc || pc.connectionState !== "connected") return;
+    setStatus("Connected to the other person");
+    let route = "";
+    for (let i = 0; i < 8 && !route; i++) {   // the browser can take a moment to report which route it picked
+      route = await routeInUse();
+      if (!route) await new Promise((r) => setTimeout(r, 300));
+    }
+    if (!pc || pc.connectionState !== "connected") return;
+    setStatus(route === "relay"
+      ? "Connected through the relay server (these two networks don't allow a direct connection). Messages are still encrypted between the two browsers."
+      : route === "direct" ? "Connected directly to the other person" : "Connected to the other person");
+  }
+
   async function renderDetails() {
     const lines = ["Details (for troubleshooting)"];
     if (pc) lines.push(`Connection: ${pc.connectionState}   Path finding: ${pc.iceConnectionState}   Handshake: ${pc.signalingState}`);
+    lines.push(`Relay server: ${relayServers.length ? "available" : "not set up on this server"}${relayOnly ? " (relay-only test mode)" : ""}`);
+    const route = pc && pc.connectionState === "connected" ? await routeInUse() : "";
+    if (route) lines.push(`Route in use: ${route === "relay" ? "through the relay" : "direct"}`);
     lines.push("Addresses I offered:", ...(offered.mine.length ? offered.mine.map((c) => "  " + c) : ["  (none yet)"]));
     lines.push("Addresses they offered:", ...(offered.theirs.length ? offered.theirs.map((c) => "  " + c) : ["  (none yet)"]));
     const summary = await pairSummary();
@@ -84,7 +117,7 @@
 
   function newPeerConnection() {
     closePeerConnection();
-    const p = new RTCPeerConnection(rtcConfig);
+    const p = new RTCPeerConnection(rtcConfig());
     pc = p;
     p.onicecandidate = (e) => {
       if (p !== pc || !e.candidate || !e.candidate.candidate) return;
@@ -102,21 +135,24 @@
 
   async function onStateChange() {
     const state = pc.connectionState;
-    if (state === "connected") setStatus("Connected directly to the other person");
+    if (state === "connected") await showConnected();
     else if (state === "connecting") setStatus("Both sides have each other's addresses. Trying to reach the other person directly...");
     else if (state === "disconnected") setStatus("Connection interrupted...");
     else if (state === "failed") {
       refreshSend();
-      setStatus("Could not connect directly. The two browsers swapped addresses, but no route between them answered. " +
-        "That happens when one of the two networks (some wifi, cellular or a VPN) does not allow direct connections; " +
-        "it would need a relay server. Reload both pages to try again.");
+      setStatus(relayServers.length
+        ? "Could not connect, directly or through the relay. The two browsers swapped addresses, but no route between them answered. " +
+          "Reload both pages to try again."
+        : "Could not connect directly. The two browsers swapped addresses, but no route between them answered. " +
+          "That happens when one of the two networks (some wifi, cellular or a VPN) does not allow direct connections; " +
+          "it would need a relay server. Reload both pages to try again.");
     }
     renderDetails();
   }
 
   function setupChannel(ch) {
     channel = ch;
-    ch.onopen = () => { if (ch === channel) { refreshSend(); setStatus("Connected directly to the other person"); } };
+    ch.onopen = () => { if (ch === channel) { refreshSend(); showConnected(); } };
     ch.onclose = () => { if (ch === channel) refreshSend(); };
     ch.onmessage = (e) => { if (ch === channel) log("Them: " + (typeof e.data === "string" ? e.data : "(binary data ignored)")); };
     refreshSend();
@@ -135,6 +171,7 @@
   async function handleSignal(msg) {
     switch (msg.type) {
       case "joined":
+        if (Array.isArray(msg.iceServers)) relayServers = msg.iceServers;
         if (msg.initiator) {
           // We arrived second, so we make the offer
           const p = newPeerConnection();

@@ -1,9 +1,13 @@
 "use strict";
+const crypto = require("crypto");
 const { WebSocketServer } = require("ws");
 
 // Minimal signaling relay for the MVP. No keys, secrets or origin checks: anyone who
 // knows a room id can join it. It only passes offers, answers and ICE candidates between
 // the two browsers in a room. The chat itself never goes through this server.
+//
+// If a relay (TURN) server is set up next to it, it also hands each browser a short-lived
+// login for that relay, for the cases where the two networks allow no direct connection.
 
 // ---------- Settings (override with environment variables) ----------
 const envNum = (name, fallback) => {
@@ -13,6 +17,10 @@ const envNum = (name, fallback) => {
 const HOST = process.env.P2P_HOST || "127.0.0.1";   // nginx on the same machine proxies /ws here
 const PORT = envNum("P2P_PORT", 9000);
 const HEARTBEAT_MS = 15 * 1000;   // how often to check that each connection is still alive
+// Relay: off unless the secret is set (deploy/setup.sh puts it in /etc/hermes-route/turn.env)
+const TURN_SECRET = process.env.P2P_TURN_SECRET || "";
+const TURN_PORT = envNum("P2P_TURN_PORT", 3478);
+const TURN_TTL_S = envNum("P2P_TURN_TTL_S", 12 * 60 * 60);   // how long a relay login stays valid
 
 const rooms = new Map();   // roomId -> Set of sockets (at most 2)
 const wss = new WebSocketServer({ host: HOST, port: PORT, maxPayload: 256 * 1024 });
@@ -41,6 +49,24 @@ function describeCandidate(c) {
   const kind = addrKind(addr);
   const shown = kind === "IPv4-public" ? `${addr}:${port}` : kind.startsWith("IPv6") ? addr.split(":").slice(0, 4).join(":") + "::" : "";
   return `candidate ${String(proto).toLowerCase()} ${type} ${kind} ${shown}`.trim();
+}
+
+// ---------- Relay logins ----------
+// coturn's "use-auth-secret" scheme: the username is an expiry time, the password is an HMAC of
+// it with the shared secret. Nothing is stored; the relay checks the same sum.
+// The relay runs on the same machine as this site, so its address is whatever the browser used
+// to reach us (the Host header), which keeps any address out of the config.
+function relayServersFor(req) {
+  if (!TURN_SECRET) return undefined;
+  const host = String(req.headers.host || "").replace(/:\d+$/, "");
+  if (!/^[A-Za-z0-9.-]+$/.test(host)) return undefined;
+  const username = `${Math.floor(Date.now() / 1000) + TURN_TTL_S}:hermes`;
+  const credential = crypto.createHmac("sha1", TURN_SECRET).update(username).digest("base64");
+  return [{
+    urls: [`turn:${host}:${TURN_PORT}?transport=udp`, `turn:${host}:${TURN_PORT}?transport=tcp`],
+    username,
+    credential,
+  }];
 }
 
 // ---------- Rooms ----------
@@ -84,7 +110,7 @@ wss.on("connection", (ws, req) => {
       // The second person to arrive makes the offer. That also covers someone coming back after a reload.
       const initiator = room.size === 2;
       log(ws, id, `joined (${room.size} in room${initiator ? ", makes the offer" : ""})`);
-      send(ws, { type: "joined", initiator });
+      send(ws, { type: "joined", initiator, iceServers: relayServersFor(req) });
       for (const peer of room) if (peer !== ws) send(peer, { type: "peer-joined" });
       return;
     }
@@ -110,4 +136,4 @@ setInterval(() => {
   }
 }, HEARTBEAT_MS);
 
-console.log(`Signaling on ${HOST}:${PORT}`);
+console.log(`Signaling on ${HOST}:${PORT} (relay logins ${TURN_SECRET ? "on" : "off"})`);
