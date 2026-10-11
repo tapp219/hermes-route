@@ -8,9 +8,16 @@
   const secondTextbox = document.querySelector(".second-textbox");
   const sendButton = document.querySelector(".send-button");
   const renameButton = document.querySelector(".rename-button");
+  const attachButton = document.querySelector(".attach-button");
+  const fileInput = $("file");
 
   const setStatus = (t) => { $("status").textContent = t; };
   const showAlert = (t) => { const a = $("alert"); a.textContent = t; a.hidden = false; };
+  // A warning that goes away by itself, unless a different one has taken its place by then
+  const showBriefAlert = (t) => {
+    showAlert(t);
+    setTimeout(() => { const a = $("alert"); if (a.textContent === t) a.hidden = true; }, 8000);
+  };
 
   if (!window.isSecureContext || !window.crypto || !crypto.subtle || !window.RTCPeerConnection || !window.indexedDB) {
     setStatus("This browser can't run the app (needs HTTPS, Web Crypto, WebRTC and IndexedDB).");
@@ -214,8 +221,14 @@
   // What travels over the connection is small JSON frames:
   //   hello  sent by each side when a connection opens: its name and its message counter
   //   msg    a chat message, with an id, its place in line, and the time it was sent
-  //   ack    "I have message <id>"
+  //   ack    "I have message <id>" (or file <id>, all of it)
   //   name   the sender changed their name
+  // and, for files (see "Files" further down):
+  //   file   "I have a file for you": its id, place in line, time, name, type and size
+  //   want   the receiver's reply: "send me file <id>, starting at byte <from>"
+  //   data   "the pieces that follow are file <id>, starting at byte <from>"; the pieces themselves
+  //          are the only thing on the connection that is raw bytes instead of JSON
+  //   cancel the sender can't send file <id> after all
   // Shown until a name is chosen: your own messages say "You", the other person's say "Anonymous"
   const DEFAULT_NAME = "You", DEFAULT_OTHER_NAME = "Anonymous";
   const cleanName = (v) => (typeof v === "string" ? v.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 30) : "");
@@ -241,22 +254,26 @@
   const nameFor = (mine) => (mine ? userName || DEFAULT_NAME : otherUserName || DEFAULT_OTHER_NAME) + ": ";
 
   // Adds one message to the top textbox, in its place in line: name, text, and the time it was sent
-  function addMessage(m) {   // m: { id, mine, clock, ts, text }
+  function addMessage(m) {   // m: { id, mine, clock, ts, and either text or file }
     m.rank = (rec.pub < rec.peerPub) === m.mine ? 0 : 1;
     const messageElement = document.createElement("div");
     messageElement.className = m.mine ? "message-row" : "message-row other-user";
     m.nameSpan = document.createElement("span");
     m.nameSpan.className = "message-name";
     m.nameSpan.textContent = nameFor(m.mine);
-    const textSpan = document.createElement("span");
-    textSpan.className = "message-text";
-    textSpan.textContent = m.text;
+    let body;
+    if (m.file) body = fileBody(m);
+    else {
+      body = document.createElement("span");
+      body.className = "message-text";
+      body.textContent = m.text;
+    }
     m.timeElement = document.createElement("time");
     m.timeElement.className = "message-time";
     m.timeElement.dateTime = new Date(m.ts).toISOString();
     m.timeElement.title = new Date(m.ts).toLocaleString();
     m.timeElement.textContent = timeText(m.ts);
-    messageElement.append(m.nameSpan, textSpan, m.timeElement);
+    messageElement.append(m.nameSpan, body, m.timeElement);
     m.row = messageElement;
 
     let i = messages.length;
@@ -268,6 +285,230 @@
 
   // A name changed: every message from that person shows the new one
   function renderNames() { for (const m of messages) m.nameSpan.textContent = nameFor(m.mine); }
+
+  // ---------- Files ----------
+  // A file is a message like any other (same counter, same place in line on both screens), but its
+  // contents go across in pieces. The sender announces it; the receiver says where to start from, which
+  // is 0 unless a dropped connection left it with the first part already; the sender sends the rest.
+  // Files are held in this page's memory only. Nothing is written to disk until someone presses Download.
+  const MAX_FILE_BYTES = 100 * 1000 * 1000;   // 100 MB
+  const PIECE_BYTES = 16 * 1024;        // the size every browser accepts in one go
+  const BUFFER_FULL = 1024 * 1024;      // stop handing pieces to the browser while this much is still waiting to leave
+  const BUFFER_LOW = 256 * 1024;
+  // Pictures, video and sound are shown in the chat itself; anything else gets a Download button only.
+  // The type has to be a plain image/..., video/... or audio/... one, with no "+" in it. That leaves out
+  // SVG pictures (image/svg+xml) and web pages on purpose: those can carry scripts. If the browser turns
+  // out not to be able to show the file, the preview is taken away again and Download is what is left.
+  const embedKind = (type) => {
+    const found = /^(image|video|audio)\/[a-z0-9.-]+$/.exec(type);
+    return found ? (found[1] === "image" ? "img" : found[1]) : "";
+  };
+  // Different systems call the same kind of sound file different things; players only know the usual name
+  const USUAL_TYPE = { "audio/vnd.wave": "audio/wav", "audio/wave": "audio/wav", "audio/x-wav": "audio/wav", "audio/mp3": "audio/mpeg", "audio/x-m4a": "audio/mp4", "video/x-m4v": "video/mp4" };
+  const outgoing = new Map();   // my files the other person doesn't have all of yet (id -> message)
+  const incoming = new Map();   // the other person's files I don't have all of yet (id -> message)
+  let wanted = [];              // what the other person has asked for and I haven't sent yet: { m, from }
+  let sendingFiles = false;
+  let receiving = null;         // the incoming file that the pieces arriving now belong to
+
+  // No folders, no control characters, and none of the invisible marks that make a name read backwards
+  const cleanFileName = (v) => (typeof v === "string"
+    ? v.replace(/[\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069\/\\]/g, "").trim().slice(0, 150) : "") || "file";
+  const cleanType = (v) => {
+    const type = typeof v === "string" ? v.slice(0, 100).split(";")[0].trim().toLowerCase() : "";
+    return Object.hasOwn(USUAL_TYPE, type) ? USUAL_TYPE[type] : type;
+  };
+  const sizeText = (n) => (n < 1000 ? `${n} bytes` : n < 1e6 ? `${(n / 1e3).toFixed(n < 1e4 ? 1 : 0)} kB` : `${(n / 1e6).toFixed(n < 1e7 ? 1 : 0)} MB`);
+  const atBottom = () => firstTextbox.scrollHeight - firstTextbox.scrollTop - firstTextbox.clientHeight < 40;
+  const scrollToBottom = () => { firstTextbox.scrollTop = firstTextbox.scrollHeight; };
+
+  // The middle of a file's row: its name and size, and how far along it is
+  function fileBody(m) {   // m.file: { name, type, size }; m.moved: bytes sent or received so far
+    m.fileBox = document.createElement("div");
+    m.fileBox.className = "message-file";
+    m.fileLine = document.createElement("div");
+    m.fileLine.className = "file-line";
+    const name = document.createElement("span");
+    name.className = "file-name";
+    name.textContent = m.file.name;
+    const size = document.createElement("span");
+    size.className = "file-size";
+    size.textContent = sizeText(m.file.size);
+    m.fileLine.append(name, size);
+    m.progress = document.createElement("progress");
+    m.progress.className = "file-progress";
+    m.progress.max = Math.max(m.file.size, 1);
+    m.stateElement = document.createElement("span");
+    m.stateElement.className = "file-state";
+    m.fileBox.append(m.fileLine, m.progress, m.stateElement);
+    showFileState(m);
+    return m.fileBox;
+  }
+
+  // The line under a file that says what is happening to it. Nothing once it has fully arrived.
+  function showFileState(m) {
+    const percent = Math.floor((100 * m.moved) / Math.max(m.file.size, 1));
+    let text = "";
+    if (m.failed) text = m.failed;
+    else if (m.done) text = "";
+    else if (!canSend()) text = "Waiting for the connection...";
+    else if (m.stalled) text = "The other person left before this finished.";
+    else if (m.mine) text = m.moved ? `Sending ${percent}%` : "Waiting to send...";
+    else text = `Receiving ${percent}%`;
+    m.stateElement.textContent = text;
+    m.stateElement.hidden = !text;
+    m.progress.value = m.moved;
+    m.progress.hidden = !!m.done || !!m.failed;
+  }
+
+  // The file itself is here (straight away for the sender, after the last piece for the receiver):
+  // show it if it is a picture, video or sound, and add the Download button either way
+  function showFileContent(m, source) {
+    const kind = embedKind(m.file.type);
+    // Only the kinds shown above keep their type. Everything else is marked as plain bytes, so that
+    // opening its address in a tab downloads it instead of running it as a page on this site.
+    const url = URL.createObjectURL(source.slice(0, source.size, kind ? m.file.type : "application/octet-stream"));
+    const stay = atBottom();
+    if (kind) {
+      const el = document.createElement(kind);
+      el.className = kind === "audio" ? "file-audio" : "file-preview";
+      if (kind === "img") el.alt = m.file.name;
+      else { el.controls = true; el.preload = "metadata"; }
+      // Its height is only known once it has loaded: keep the newest message in view
+      el.addEventListener(kind === "img" ? "load" : "loadedmetadata", () => { if (stay) scrollToBottom(); });
+      el.addEventListener("error", () => el.remove());   // not something this browser can show: Download is enough
+      el.src = url;
+      m.fileBox.prepend(el);
+    }
+    const link = document.createElement("a");
+    link.className = "download-button";
+    link.href = url;
+    link.download = m.file.name;
+    link.textContent = "Download";
+    m.fileLine.append(link);
+    if (stay) scrollToBottom();
+  }
+
+  // Attach: each chosen file becomes a message straight away and is announced to the other person
+  function attachFiles(files) {
+    for (const file of files) {
+      if (!canSend()) return;
+      const name = cleanFileName(file.name);
+      if (file.size > MAX_FILE_BYTES) {
+        showBriefAlert(`"${name}" is too big to send. The limit is ${sizeText(MAX_FILE_BYTES)}.`);
+        continue;
+      }
+      clock += 1;
+      const frame = { t: "file", id: toHex(crypto.getRandomValues(new Uint8Array(12))), clock, ts: Date.now(), name, type: cleanType(file.type), size: file.size };
+      const m = { id: frame.id, mine: true, clock, ts: frame.ts, file: { name, type: frame.type, size: file.size }, source: file, moved: 0 };
+      outbox.set(m.id, frame);
+      outgoing.set(m.id, m);
+      addMessage(m);
+      showFileContent(m, file);
+      sendFrame(frame);
+    }
+  }
+
+  // Resolves when the browser has sent most of what it was holding (or after a moment, to look again)
+  const drained = (ch) => new Promise((resolve) => {
+    const done = () => { clearTimeout(timer); ch.removeEventListener("bufferedamountlow", done); resolve(); };
+    const timer = setTimeout(done, 500);
+    ch.addEventListener("bufferedamountlow", done);
+  });
+
+  // Sends what the other person asked for, one file at a time, a piece at a time, never faster than
+  // the connection takes it. Chat messages typed meanwhile go out in between the pieces.
+  async function sendWantedFiles() {
+    if (sendingFiles) return;
+    sendingFiles = true;
+    const ch = channel;
+    const live = () => !!ch && ch === channel && ch.readyState === "open";
+    try {
+      while (live() && wanted.length) {
+        const { m, from } = wanted.shift();
+        if (!outgoing.has(m.id)) continue;
+        ch.send(JSON.stringify({ t: "data", id: m.id, from }));
+        m.moved = from;
+        for (let at = from; at < m.file.size; at += PIECE_BYTES) {
+          const length = Math.min(PIECE_BYTES, m.file.size - at);
+          let piece = null;
+          try { piece = await m.source.slice(at, at + length).arrayBuffer(); } catch { /* handled just below */ }
+          if (!piece || piece.byteLength !== length) { cancelOutgoing(m); break; }   // the file was moved, changed or deleted
+          while (live() && ch.bufferedAmount > BUFFER_FULL) await drained(ch);
+          if (!live()) return;
+          ch.send(piece);
+          m.moved = at + length;
+          showFileState(m);
+        }
+      }
+    } catch (err) {
+      console.error(err);   // the connection went away mid-send; what is unconfirmed is announced again on the next one
+    } finally {
+      sendingFiles = false;
+      if (wanted.length && canSend()) sendWantedFiles();   // asked for on a newer connection while this was winding down
+    }
+  }
+
+  function cancelOutgoing(m) {
+    outbox.delete(m.id);
+    outgoing.delete(m.id);
+    m.failed = "This file could not be read, so it was not sent.";
+    showFileState(m);
+    sendFrame({ t: "cancel", id: m.id });
+  }
+
+  // An incoming file that will not be finished
+  function dropIncoming(m, why) {
+    incoming.delete(m.id);
+    seen.add(m.id);
+    if (receiving === m) receiving = null;
+    m.pieces = null;
+    m.failed = why;
+    showFileState(m);
+  }
+
+  // One piece of the file being received
+  function onPiece(piece) {
+    const m = receiving;
+    if (!m || piece.byteLength === 0) return;
+    if (m.moved + piece.byteLength > m.file.size) { dropIncoming(m, "This file could not be received."); return; }   // more than was announced
+    m.pieces.push(piece);
+    m.moved += piece.byteLength;
+    if (m.moved === m.file.size) finishIncoming(m);
+    else showFileState(m);
+  }
+
+  function finishIncoming(m) {
+    incoming.delete(m.id);
+    seen.add(m.id);
+    if (receiving === m) receiving = null;
+    m.done = true;
+    const whole = new Blob(m.pieces);
+    m.pieces = null;
+    showFileState(m);
+    showFileContent(m, whole);
+    sendFrame({ t: "ack", id: m.id });
+  }
+
+  // The other person announced a file (again after every reconnect, until I confirm having all of it)
+  function onFileOffer(f) {
+    if (!isStr(f.id, 64) || !validClock(f.clock) || !Number.isFinite(f.ts)) return;
+    if (!Number.isSafeInteger(f.size) || f.size < 0 || f.size > MAX_FILE_BYTES) return;
+    if (seen.has(f.id)) { sendFrame({ t: "ack", id: f.id }); return; }
+    let m = incoming.get(f.id);
+    if (!m) {
+      clock = Math.max(clock, f.clock);
+      m = {
+        id: f.id, mine: false, clock: f.clock, ts: Math.min(f.ts, Date.now()),
+        file: { name: cleanFileName(f.name), type: cleanType(f.type), size: f.size }, pieces: [], moved: 0,
+      };
+      incoming.set(m.id, m);
+      addMessage(m);
+    }
+    m.stalled = false;
+    if (m.file.size === 0) finishIncoming(m);
+    else { showFileState(m); sendFrame({ t: "want", id: m.id, from: m.moved }); }
+  }
 
   // ---------- WebRTC state ----------
   const stunServers = [{ urls: "stun:stun.l.google.com:19302" }];
@@ -292,7 +533,10 @@
 
   const pcState = () => (pc ? pc.connectionState : "none");
   const canSend = () => !!channel && channel.readyState === "open" && peerReady;
-  const refreshSend = () => { sendButton.disabled = !canSend(); };
+  const refreshSend = () => {
+    sendButton.disabled = attachButton.disabled = !canSend();
+    for (const m of [...outgoing.values(), ...incoming.values()]) showFileState(m);
+  };
   // Sends one frame to the other person. False if there is no open connection right now.
   const sendFrame = (frame) => {
     if (!channel || channel.readyState !== "open") return false;
@@ -309,6 +553,8 @@
     }
     channel = null;
     peerReady = false;
+    wanted = [];        // file requests and pieces belong to the connection they came in on
+    receiving = null;
     currentSid = null;   // an answer to an offer from the previous connection must not be applied to this one
     const p = new RTCPeerConnection(rtcConfig(withRelay));
     pc = p;
@@ -348,6 +594,8 @@
   function setupChannel(ch) {
     channel = ch;
     peerReady = false;
+    ch.binaryType = "arraybuffer";
+    ch.bufferedAmountLowThreshold = BUFFER_LOW;
     let greeted = false;
     const greet = () => {
       if (greeted || ch !== channel || ch.readyState !== "open") return;
@@ -361,7 +609,11 @@
       showConnected();
     };
     ch.onclose = () => { if (ch === channel) refreshSend(); };
-    ch.onmessage = (e) => { if (ch === channel && typeof e.data === "string") onFrame(e.data); };
+    ch.onmessage = (e) => {
+      if (ch !== channel) return;
+      if (typeof e.data === "string") onFrame(e.data);
+      else if (e.data instanceof ArrayBuffer) onPiece(e.data);
+    };
     greet();   // in case the channel was already open when it was handed to us
     refreshSend();
   }
@@ -370,7 +622,10 @@
   function confirmDelivered(id) {
     if (!outbox.delete(id)) return;
     const m = messages.find((x) => x.id === id);
-    if (m) { m.row.classList.remove("pending"); m.timeElement.textContent = timeText(m.ts); }
+    if (!m) return;
+    m.row.classList.remove("pending");
+    m.timeElement.textContent = timeText(m.ts);
+    if (m.file) { outgoing.delete(id); m.done = true; showFileState(m); }
   }
 
   // One frame from the other person. Anything malformed is ignored.
@@ -386,6 +641,9 @@
       otherUserName = cleanName(f.name) || otherUserName;   // no name (say, after their reload): keep the one we know
       renderNames();
       peerReady = true;
+      // A file they were part-way through sending is announced again in a moment if they still have it.
+      // If they don't (they reloaded the page), it stays marked as unfinished.
+      for (const m of incoming.values()) m.stalled = true;
       for (const frame of outbox.values()) sendFrame(frame);   // whatever the last connection dropped
       refreshSend();
     } else if (f.t === "name") {
@@ -401,6 +659,20 @@
       clock = Math.max(clock, f.clock);
       // A time later than this device's own "now" can only be the other device's clock running fast
       addMessage({ id: f.id, mine: false, clock: f.clock, ts: Math.min(f.ts, Date.now()), text: f.text.slice(0, 5000) });
+    } else if (f.t === "file") {
+      onFileOffer(f);
+    } else if (f.t === "want") {
+      const m = isStr(f.id, 64) ? outgoing.get(f.id) : null;
+      if (!m || !Number.isSafeInteger(f.from) || f.from < 0 || f.from >= m.file.size) return;
+      wanted = wanted.filter((w) => w.m !== m);
+      wanted.push({ m, from: f.from });
+      sendWantedFiles();
+    } else if (f.t === "data") {
+      const m = isStr(f.id, 64) ? incoming.get(f.id) : null;
+      receiving = m && f.from === m.moved ? m : null;   // pieces that don't pick up where I am are let go by
+    } else if (f.t === "cancel") {
+      const m = isStr(f.id, 64) ? incoming.get(f.id) : null;
+      if (m) dropIncoming(m, "The other person's file could not be sent.");
     }
   }
 
@@ -646,6 +918,13 @@
       event.preventDefault();
       sendChat();
     }
+  });
+
+  // Attach opens the browser's file picker; whatever is chosen is sent
+  attachButton.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => {
+    attachFiles(fileInput.files);
+    fileInput.value = "";   // so that choosing the same file again counts as a change
   });
 
   // Rename: you choose your own name, and the other person sees it too

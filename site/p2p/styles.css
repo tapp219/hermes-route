@@ -271,7 +271,7 @@ button.qr-code:hover {
     width: 100%;
     height: 120px;
     padding: 10px 12px;
-    padding-right: 96px;
+    padding-right: 108px;
     box-sizing: border-box;
     font-size: 18px;
     display: block;
@@ -298,18 +298,37 @@ button.qr-code:hover {
     position: absolute;
     right: 16px;
     bottom: 16px;
+    width: 80px;
     background-color: #0033ff;
     color: #ffffff;
-    border: none;
+    border: 2px solid #0033ff;
     border-radius: 4px;
-    padding: 8px 16px;
+    padding: 6px 0;
     cursor: pointer;
     font-size: 16px;
     font-weight: 700;
+    box-sizing: border-box;
 }
 
-.send-button:disabled {
-    /*Send button while there is nobody connected to send to*/
+.attach-button {
+    /*Attach button, above Send. Outlined instead of filled, so Send stays the main one*/
+    position: absolute;
+    right: 16px;
+    top: 16px;
+    width: 80px;
+    background-color: transparent;
+    color: #00bfff;
+    border: 2px solid #00bfff;
+    border-radius: 4px;
+    padding: 6px 0;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 700;
+    box-sizing: border-box;
+}
+
+.send-button:disabled, .attach-button:disabled {
+    /*Send and Attach while there is nobody connected to send to*/
     opacity: 0.5;
     cursor: default;
 }
@@ -334,11 +353,20 @@ button.qr-code:hover {
 }
 
 /*Buttons react when pointed at and when pressed*/
-.send-button:hover:enabled, .copy-button:hover, .rename-button:hover {
+.send-button:hover:enabled, .copy-button:hover, .rename-button:hover, .download-button:hover {
     background-color: #1f4dff;
 }
 
-.send-button:active:enabled, .copy-button:active, .rename-button:active {
+.send-button:hover:enabled {
+    border-color: #1f4dff;
+}
+
+.attach-button:hover:enabled {
+    background-color: #00bfff;
+    color: #111820;
+}
+
+.send-button:active:enabled, .attach-button:active:enabled, .copy-button:active, .rename-button:active, .download-button:active {
     transform: translateY(1px);
 }
 
@@ -389,6 +417,76 @@ button:focus-visible, a:focus-visible {
 .message-row.pending .message-name, .message-row.pending .message-text {
     /*A message the other person hasn't received yet*/
     opacity: 0.55;
+}
+
+.message-file {
+    /*A file in the chat: the picture, video or sound itself if it is one, then its name, size and Download button*/
+    min-width: 0;
+}
+
+.message-file [hidden] {
+    display: none;
+}
+
+.file-preview {
+    /*A picture or video, shown in the chat*/
+    display: block;
+    max-width: 100%;
+    max-height: 320px;
+    margin: 2px 0 8px;
+    border-radius: 6px;
+}
+
+.file-audio {
+    display: block;
+    width: 100%;
+    max-width: 420px;
+    margin: 2px 0 8px;
+}
+
+.file-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+}
+
+.file-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.file-size {
+    color: #9fb1bd;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.download-button {
+    /*Download button, a smaller version of the other buttons*/
+    background-color: #0033ff;
+    color: #ffffff;
+    border-radius: 4px;
+    padding: 3px 12px;
+    font-size: 15px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.file-progress {
+    /*How much of a file has been sent or received so far*/
+    display: block;
+    width: 100%;
+    max-width: 420px;
+    height: 8px;
+    margin: 8px 0 4px;
+    accent-color: #00bfff;
+}
+
+.file-state {
+    display: block;
+    color: #9fb1bd;
+    font-size: 14px;
 }
 
 @media (min-width: 900px) {
@@ -460,14 +558,30 @@ button:focus-visible, a:focus-visible {
     }
 
     .second-textbox {
-        height: 92px;
-        padding-right: 88px;
+        /*Tall enough for Attach and Send, one above the other, at a size a thumb can hit*/
+        height: 110px;
+        padding-right: 100px;
+    }
+
+    .send-button, .attach-button {
+        right: 10px;
+        padding: 7px 0;
     }
 
     .send-button {
-        right: 12px;
-        bottom: 12px;
-        padding: 10px 16px;
+        bottom: 10px;
+    }
+
+    .attach-button {
+        top: 10px;
+    }
+
+    .file-preview {
+        max-height: 240px;
+    }
+
+    .download-button {
+        padding: 6px 14px;
     }
 }
 
