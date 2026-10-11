@@ -7,7 +7,7 @@
 #
 # Pulls the latest commit, installs the signaling server's dependencies, copies
 # the nginx and systemd config into /etc, then reloads nginx and restarts the
-# signaling service. Site-only changes (anything under site/) don't need this;
+# signaling service (and the relay server, on servers that have one). Site-only changes (anything under site/) don't need this;
 # a plain `git pull` is enough for those.
 set -euo pipefail
 
@@ -28,8 +28,19 @@ main() {
   sudo nginx -t
   sudo systemctl reload nginx
 
+  # Relay server (coturn): only on servers where deploy/setup.sh installed it
+  local relay=""
+  if command -v turnserver >/dev/null && sudo test -f /etc/hermes-route/turn.env; then
+    sudo install -d /etc/systemd/system/coturn.service.d
+    sudo install -m 644 deploy/turn/coturn-override.conf /etc/systemd/system/coturn.service.d/hermes-route.conf
+    relay=yes
+  fi
+
   sudo systemctl daemon-reload
   sudo systemctl restart signal
+  if [ -n "$relay" ]; then
+    sudo systemctl restart coturn
+  fi
 
   echo "Server is now running $(git rev-parse --short HEAD)"
 }

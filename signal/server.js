@@ -21,6 +21,10 @@ const MAX_MSGS_PER_10S = 60;
 const AUTH_TIMEOUT_MS = 10 * 1000;
 const HEARTBEAT_MS = 30 * 1000;
 const ROOM_ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
+// Relay: off unless the secret is set (deploy/setup.sh puts it in /etc/hermes-route/turn.env)
+const TURN_SECRET = process.env.P2P_TURN_SECRET || "";
+const TURN_PORT = envNum("P2P_TURN_PORT", 3478);
+const TURN_TTL_S = envNum("P2P_TURN_TTL_S", 12 * 60 * 60);   // how long a relay login stays valid
 
 // roomId -> { slots: [pubKeyA, pubKeyB], sockets: [wsA, wsB], lastActive }
 const rooms = new Map();
@@ -60,6 +64,24 @@ function parsePublicKey(b64) {
 }
 
 const isStr = (v, max) => typeof v === "string" && v.length > 0 && v.length <= max;
+
+// Relay logins, for when the two networks allow no direct connection. This is coturn's
+// "use-auth-secret" scheme: the username is an expiry time and the password is an HMAC of it
+// with the shared secret, so nothing is stored and the relay checks the same sum.
+// The relay runs on the same machine as this site, so its address is whatever the browser used
+// to reach us (the Host header), which keeps any address out of the config.
+function relayServersFor(req) {
+  if (!TURN_SECRET) return undefined;
+  const host = String(req.headers.host || "").replace(/:\d+$/, "");
+  if (!/^[A-Za-z0-9.-]+$/.test(host)) return undefined;
+  const username = `${Math.floor(Date.now() / 1000) + TURN_TTL_S}:hermes`;
+  const credential = crypto.createHmac("sha1", TURN_SECRET).update(username).digest("base64");
+  return [{
+    urls: [`turn:${host}:${TURN_PORT}?transport=udp`, `turn:${host}:${TURN_PORT}?transport=tcp`],
+    username,
+    credential,
+  }];
+}
 
 // Same-origin check: the page's address (Origin) must be the address the request was
 // sent to (Host, which nginx passes through). No address is written down here, so this
@@ -166,7 +188,8 @@ wss.on("connection", (ws, req) => {
         room.lastActive = Date.now();
 
         const other = room.sockets[1 - slot];
-        send(ws, { type: "joined", slot, peerOnline: !!other });
+        // Only a browser that has proved its identity for this room gets a relay login
+        send(ws, { type: "joined", slot, peerOnline: !!other, iceServers: relayServersFor(req) });
         if (other) send(other, { type: "peer-online" });
         return;
       }
@@ -232,4 +255,4 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
-console.log(`Signaling on ${HOST}:${PORT}`);
+console.log(`Signaling on ${HOST}:${PORT} (relay logins ${TURN_SECRET ? "on" : "off"})`);

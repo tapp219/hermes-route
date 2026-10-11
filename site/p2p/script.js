@@ -62,7 +62,8 @@
   } else {
     room = toHex(crypto.getRandomValues(new Uint8Array(16)));
     secretStr = bytesToB64url(crypto.getRandomValues(new Uint8Array(32)));
-    history.replaceState(null, "", `/p2p/${room}#${secretStr}`);
+    // location.search is kept so a ?relay=only test flag carries over into the invite link
+    history.replaceState(null, "", `/p2p/${room}${location.search}#${secretStr}`);
     mayCreate = true;
   }
   $("link").value = location.href;
@@ -149,13 +150,15 @@
   const answerPayload = (sid, pub, offerPub, sdp) => JSON.stringify(["p2p-sdp-v1", room, "answer", sid, pub, offerPub, sdp]);
 
   // ---------- WebRTC state ----------
-  const rtcConfig = {
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      // Add your own TURN server here once coturn is set up (location.hostname is this site's address):
-      // { urls: `turn:${location.hostname}:3478`, username: "...", credential: "..." },
-    ],
-  };
+  const stunServers = [{ urls: "stun:stun.l.google.com:19302" }];
+  // Filled in by the server when it has a relay: used only if no direct route works
+  let relayServers = [];
+  // Opening the link with ?relay=only sends everything through the relay, to check the relay itself
+  const relayOnly = new URLSearchParams(location.search).get("relay") === "only";
+  const rtcConfig = () => ({
+    iceServers: [...stunServers, ...relayServers],
+    iceTransportPolicy: relayOnly ? "relay" : "all",
+  });
   const ALIVE = new Set(["connecting", "connected", "disconnected"]);
 
   let ws = null, authed = false, stopped = false, mySlot = -1, peerOnline = false;
@@ -174,7 +177,7 @@
       old.close();
     }
     channel = null;
-    const p = new RTCPeerConnection(rtcConfig);
+    const p = new RTCPeerConnection(rtcConfig());
     pc = p;
     p.onconnectionstatechange = () => { if (p === pc) onPcState(p.connectionState); };
     p.ondatachannel = (e) => { if (p === pc && !channel) setupChannel(e.channel); };
@@ -182,12 +185,39 @@
     return p;
   }
 
+  // Which kind of route a connection ended up on: "direct", "relay", or "" if the browser hasn't said yet
+  async function routeInUse(p) {
+    try {
+      const stats = await p.getStats();
+      let pair = null;
+      stats.forEach((s) => { if (s.type === "transport" && s.selectedCandidatePairId) pair = stats.get(s.selectedCandidatePairId) || pair; });
+      if (!pair) stats.forEach((s) => { if (!pair && s.type === "candidate-pair" && (s.selected || (s.nominated && s.state === "succeeded"))) pair = s; });
+      if (!pair) return "";
+      const kinds = [stats.get(pair.localCandidateId), stats.get(pair.remoteCandidateId)].map((c) => (c ? c.candidateType : ""));
+      return kinds.includes("relay") ? "relay" : "direct";
+    } catch { return ""; }
+  }
+
+  async function showConnected() {
+    const p = pc;
+    if (!p || p.connectionState !== "connected") return;
+    let route = "";
+    for (let i = 0; i < 8 && !route; i++) {   // the browser can take a moment to report which route it picked
+      route = await routeInUse(p);
+      if (!route) await new Promise((r) => setTimeout(r, 300));
+    }
+    if (p !== pc || p.connectionState !== "connected") return;
+    setStatus(route === "relay"
+      ? "Connected through the relay server (these two networks don't allow a direct connection). Still encrypted between the two browsers by WebRTC."
+      : route === "direct" ? "Connected directly to the other person (encrypted by WebRTC)." : "Connected to the other person (encrypted by WebRTC).");
+  }
+
   function setupChannel(ch) {
     channel = ch;
     ch.onopen = () => {
       if (ch !== channel) return;
       refreshSend();
-      setStatus("Connected directly to the other person (encrypted by WebRTC).");
+      showConnected();
     };
     ch.onclose = () => { if (ch === channel) refreshSend(); };
     ch.onmessage = (e) => {
@@ -215,7 +245,7 @@
   }
 
   function onPcState(state) {
-    if (state === "connected") setStatus("Connected directly to the other person (encrypted by WebRTC).");
+    if (state === "connected") showConnected();
     else if (state === "connecting") setStatus("Connecting...");
     else if (state === "disconnected") setStatus("Connection interrupted...");
     else if (state === "failed") { setStatus("Connection lost. Reconnecting..."); refreshSend(); recover(); }
@@ -312,6 +342,7 @@
         return;
 
       case "joined":
+        if (Array.isArray(msg.iceServers)) relayServers = msg.iceServers;
         authed = true;
         attempts = 0;
         mayCreate = false;
