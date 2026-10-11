@@ -353,9 +353,9 @@ button:focus-visible, a:focus-visible {
 }
 
 .message-row {
-    /*One chat message: name on the left, text on the right*/
+    /*One chat message: name on the left, text in the middle, the time it was sent on the right*/
     display: grid;
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto 1fr auto;
     gap: 8px;
     align-items: start;
     padding: 3px 0;
@@ -376,6 +376,19 @@ button:focus-visible, a:focus-visible {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     min-width: 0;
+}
+
+.message-time {
+    /*When the message was sent: smaller and quieter than the message itself*/
+    color: #9fb1bd;
+    font-size: 14px;
+    line-height: 1.7;
+    white-space: nowrap;
+}
+
+.message-row.pending .message-name, .message-row.pending .message-text {
+    /*A message the other person hasn't received yet*/
+    opacity: 0.55;
 }
 
 @media (min-width: 900px) {

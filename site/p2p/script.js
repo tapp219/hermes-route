@@ -8,25 +8,6 @@
   const secondTextbox = document.querySelector(".second-textbox");
   const sendButton = document.querySelector(".send-button");
   const renameButton = document.querySelector(".rename-button");
-  // Names shown next to messages. They are labels on this screen only; nothing is sent to the other person.
-  let userName = "User";
-  let otherUserName = "Other User";
-
-  // Adds one message to the top textbox: the name in one column, the text in the other
-  function addMessage(name, text, mine) {
-    const messageElement = document.createElement("div");
-    messageElement.className = mine ? "message-row" : "message-row other-user";
-    const nameSpan = document.createElement("span");
-    nameSpan.className = "message-name";
-    nameSpan.textContent = name + ": ";
-    const textSpan = document.createElement("span");
-    textSpan.className = "message-text";
-    textSpan.textContent = text;
-    messageElement.appendChild(nameSpan);
-    messageElement.appendChild(textSpan);
-    firstTextbox.appendChild(messageElement);
-    firstTextbox.scrollTop = firstTextbox.scrollHeight;
-  }
 
   const setStatus = (t) => { $("status").textContent = t; };
   const showAlert = (t) => { const a = $("alert"); a.textContent = t; a.hidden = false; };
@@ -229,6 +210,64 @@
   const offerPayload = (sid, pub, sdp) => JSON.stringify(["p2p-sdp-v1", room, "offer", sid, pub, sdp]);
   const answerPayload = (sid, pub, offerPub, sdp) => JSON.stringify(["p2p-sdp-v1", room, "answer", sid, pub, offerPub, sdp]);
 
+  // ---------- Chat messages ----------
+  // What travels over the connection is small JSON frames:
+  //   hello  sent by each side when a connection opens: its name and its message counter
+  //   msg    a chat message, with an id, its place in line, and the time it was sent
+  //   ack    "I have message <id>"
+  //   name   the sender changed their name
+  // Shown until a name is chosen: your own messages say "You", the other person's say "Anonymous"
+  const DEFAULT_NAME = "You", DEFAULT_OTHER_NAME = "Anonymous";
+  const cleanName = (v) => (typeof v === "string" ? v.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 30) : "");
+  // Each person picks their own name, which the other person sees too. "" until one is chosen.
+  // Names live only in this page's memory: nothing is saved, so a reload starts without one.
+  let userName = "";
+  let otherUserName = "";
+
+  // Message order. When both people press Send at the same moment, each message reaches the other screen
+  // after that screen has already shown its own, so "the order they arrived in" differs between the two
+  // screens. Instead every message carries a counter (one more than the highest this side has sent or
+  // seen), and both screens sort by it; if the counters tie, the person whose identity key sorts first
+  // goes first. Both sides work out the same order, and a reply always comes after what it replies to.
+  let clock = 0;
+  const messages = [];          // the messages on screen, in the order shown
+  const seen = new Set();       // ids of the other person's messages already shown, so a repeat isn't shown twice
+  const outbox = new Map();     // my messages the other person hasn't confirmed yet (id -> frame), sent again after a reconnect
+  let peerReady = false;        // the other side's hello has arrived on the current connection
+  const validClock = (v) => Number.isSafeInteger(v) && v >= 0 && v < 2 ** 40;
+  const comesBefore = (a, b) => (a.clock !== b.clock ? a.clock < b.clock : a.rank < b.rank);
+  const timeText = (ts) => new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const nameFor = (mine) => (mine ? userName || DEFAULT_NAME : otherUserName || DEFAULT_OTHER_NAME) + ": ";
+
+  // Adds one message to the top textbox, in its place in line: name, text, and the time it was sent
+  function addMessage(m) {   // m: { id, mine, clock, ts, text }
+    m.rank = (rec.pub < rec.peerPub) === m.mine ? 0 : 1;
+    const messageElement = document.createElement("div");
+    messageElement.className = m.mine ? "message-row" : "message-row other-user";
+    m.nameSpan = document.createElement("span");
+    m.nameSpan.className = "message-name";
+    m.nameSpan.textContent = nameFor(m.mine);
+    const textSpan = document.createElement("span");
+    textSpan.className = "message-text";
+    textSpan.textContent = m.text;
+    m.timeElement = document.createElement("time");
+    m.timeElement.className = "message-time";
+    m.timeElement.dateTime = new Date(m.ts).toISOString();
+    m.timeElement.title = new Date(m.ts).toLocaleString();
+    m.timeElement.textContent = timeText(m.ts);
+    messageElement.append(m.nameSpan, textSpan, m.timeElement);
+    m.row = messageElement;
+
+    let i = messages.length;
+    while (i > 0 && comesBefore(m, messages[i - 1])) i--;
+    firstTextbox.insertBefore(messageElement, i < messages.length ? messages[i].row : null);
+    messages.splice(i, 0, m);
+    firstTextbox.scrollTop = firstTextbox.scrollHeight;
+  }
+
+  // A name changed: every message from that person shows the new one
+  function renderNames() { for (const m of messages) m.nameSpan.textContent = nameFor(m.mine); }
+
   // ---------- WebRTC state ----------
   const stunServers = [{ urls: "stun:stun.l.google.com:19302" }];
   // Filled in by the server when it has a relay: used only if no direct route works
@@ -251,7 +290,13 @@
   let attempts = 0, retryTimer = null, pingTimer = null;
 
   const pcState = () => (pc ? pc.connectionState : "none");
-  const refreshSend = () => { sendButton.disabled = !(channel && channel.readyState === "open"); };
+  const canSend = () => !!channel && channel.readyState === "open" && peerReady;
+  const refreshSend = () => { sendButton.disabled = !canSend(); };
+  // Sends one frame to the other person. False if there is no open connection right now.
+  const sendFrame = (frame) => {
+    if (!channel || channel.readyState !== "open") return false;
+    try { channel.send(JSON.stringify(frame)); return true; } catch { return false; }
+  };
   const send = (obj) => { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); };
 
   function createPc(withRelay) {
@@ -262,6 +307,7 @@
       old.close();
     }
     channel = null;
+    peerReady = false;
     currentSid = null;   // an answer to an offer from the previous connection must not be applied to this one
     const p = new RTCPeerConnection(rtcConfig(withRelay));
     pc = p;
@@ -300,17 +346,61 @@
 
   function setupChannel(ch) {
     channel = ch;
+    peerReady = false;
+    let greeted = false;
+    const greet = () => {
+      if (greeted || ch !== channel || ch.readyState !== "open") return;
+      greeted = true;
+      sendFrame({ t: "hello", clock, name: userName });
+    };
     ch.onopen = () => {
       if (ch !== channel) return;
+      greet();
       refreshSend();
       showConnected();
     };
     ch.onclose = () => { if (ch === channel) refreshSend(); };
-    ch.onmessage = (e) => {
-      if (ch !== channel) return;
-      addMessage(otherUserName, typeof e.data === "string" ? e.data.slice(0, 5000) : "(binary data ignored)", false);
-    };
+    ch.onmessage = (e) => { if (ch === channel && typeof e.data === "string") onFrame(e.data); };
+    greet();   // in case the channel was already open when it was handed to us
     refreshSend();
+  }
+
+  // The other person confirmed one of my messages
+  function confirmDelivered(id) {
+    if (!outbox.delete(id)) return;
+    const m = messages.find((x) => x.id === id);
+    if (m) { m.row.classList.remove("pending"); m.timeElement.textContent = timeText(m.ts); }
+  }
+
+  // One frame from the other person. Anything malformed is ignored.
+  function onFrame(data) {
+    if (data.length > 20000) return;
+    let f;
+    try { f = JSON.parse(data); } catch { return; }
+    if (!f || typeof f !== "object") return;
+
+    if (f.t === "hello") {
+      // Catch this side's counter up (it starts again from 0 after a reload) before anything is sent
+      if (validClock(f.clock)) clock = Math.max(clock, f.clock);
+      otherUserName = cleanName(f.name) || otherUserName;   // no name (say, after their reload): keep the one we know
+      renderNames();
+      peerReady = true;
+      for (const frame of outbox.values()) sendFrame(frame);   // whatever the last connection dropped
+      refreshSend();
+    } else if (f.t === "name") {
+      otherUserName = cleanName(f.name) || otherUserName;
+      renderNames();
+    } else if (f.t === "ack") {
+      if (isStr(f.id, 64)) confirmDelivered(f.id);
+    } else if (f.t === "msg") {
+      if (!isStr(f.id, 64) || !validClock(f.clock) || typeof f.text !== "string" || !Number.isFinite(f.ts)) return;
+      sendFrame({ t: "ack", id: f.id });   // also for a repeat: the earlier confirmation may be what got lost
+      if (seen.has(f.id)) return;
+      seen.add(f.id);
+      clock = Math.max(clock, f.clock);
+      // A time later than this device's own "now" can only be the other device's clock running fast
+      addMessage({ id: f.id, mine: false, clock: f.clock, ts: Math.min(f.ts, Date.now()), text: f.text.slice(0, 5000) });
+    }
   }
 
   // Wait until ICE gathering finishes (or a few seconds pass) so the signed SDP contains the candidates
@@ -533,9 +623,19 @@
   // ---------- Chat box ----------
   function sendChat() {
     const text = secondTextbox.value;
-    if (text.trim() === "" || !channel || channel.readyState !== "open") return;
-    channel.send(text);
-    addMessage(userName, text, true);
+    if (text.trim() === "" || !canSend()) return;
+    clock += 1;
+    const frame = { t: "msg", id: toHex(crypto.getRandomValues(new Uint8Array(12))), clock, ts: Date.now(), text };
+    outbox.set(frame.id, frame);
+    const m = { id: frame.id, mine: true, clock: frame.clock, ts: frame.ts, text };
+    addMessage(m);
+    sendFrame(frame);
+    // Normally confirmed within a moment. If not (the connection just dropped), say so until it is.
+    setTimeout(() => {
+      if (!outbox.has(m.id)) return;
+      m.row.classList.add("pending");
+      m.timeElement.textContent = "not delivered yet";
+    }, 2000);
     secondTextbox.value = "";
   }
   sendButton.addEventListener("click", sendChat);
@@ -547,11 +647,13 @@
     }
   });
 
+  // Rename: you choose your own name, and the other person sees it too
   renameButton.addEventListener("click", () => {
-    const newUserName = prompt("Enter your name: ", userName);
-    if (newUserName !== null && newUserName.trim() !== "") userName = newUserName.trim();
-    const newOtherName = prompt("Enter other user's name: ", otherUserName);
-    if (newOtherName !== null && newOtherName.trim() !== "") otherUserName = newOtherName.trim();
+    const newUserName = cleanName(prompt("Enter your name: ", userName));
+    if (newUserName === "") return;   // cancelled, or left blank
+    userName = newUserName;
+    renderNames();
+    if (peerReady) sendFrame({ t: "name", name: userName });   // otherwise the hello carries it when the connection opens
   });
 
   connect();
