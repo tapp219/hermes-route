@@ -87,7 +87,14 @@
   }, () => { $("link").select(); });
   // The link only ever works for two browsers, so once the other person has joined there is nothing left to
   // share: the link and Copy button give way to a note saying so (styles.css does the hiding)
-  const hideInvite = () => { document.querySelector(".invite-container").classList.add("joined"); };
+  const inviteBox = document.querySelector(".invite-container");
+  const hideInvite = () => { inviteBox.classList.add("joined"); };
+  // On a phone the QR code and its note take a good part of the screen. Once the two are connected and
+  // the messages no longer fit in their box, it shrinks to a small code beside the status line (styles.css
+  // does that, on narrow screens only). Pressing the small code still opens the big one, note included.
+  const tidyInvite = () => {
+    if (inviteBox.classList.contains("joined") && firstTextbox.scrollHeight > firstTextbox.clientHeight + 1) inviteBox.classList.add("compact");
+  };
 
   // ---------- QR code of the invite link ----------
   // Drawn as two shapes so styles.css can colour them: the three corner squares, and everything else
@@ -125,7 +132,7 @@
     const big = $("qr-big");
     big.querySelector(".qr-big-code").replaceChildren(svg.cloneNode(true));
     holder.addEventListener("click", () => {
-      const joined = document.querySelector(".invite-container").classList.contains("joined");
+      const joined = inviteBox.classList.contains("joined");
       big.querySelector(".qr-big-hint").textContent =
         (joined ? "You are both here, so this link now only works in your two browsers." : "Scan to join this chat.") + " Press anywhere to close.";
       big.showModal();
@@ -280,6 +287,7 @@
     while (i > 0 && comesBefore(m, messages[i - 1])) i--;
     firstTextbox.insertBefore(messageElement, i < messages.length ? messages[i].row : null);
     messages.splice(i, 0, m);
+    tidyInvite();
     firstTextbox.scrollTop = firstTextbox.scrollHeight;
   }
 
@@ -321,6 +329,20 @@
   const sizeText = (n) => (n < 1000 ? `${n} bytes` : n < 1e6 ? `${(n / 1e3).toFixed(n < 1e4 ? 1 : 0)} kB` : `${(n / 1e6).toFixed(n < 1e7 ? 1 : 0)} MB`);
   const atBottom = () => firstTextbox.scrollHeight - firstTextbox.scrollTop - firstTextbox.clientHeight < 40;
   const scrollToBottom = () => { firstTextbox.scrollTop = firstTextbox.scrollHeight; };
+
+  // Pressing a picture in the chat opens it as big as the window allows. Pressing anywhere (or Esc) closes it.
+  const viewer = $("viewer");
+  function openViewer(m, url) {
+    const picture = viewer.querySelector(".viewer-picture");
+    picture.src = url;
+    picture.alt = m.file.name;
+    viewer.querySelector(".viewer-name").textContent = m.file.name;
+    const link = viewer.querySelector(".viewer-download");
+    link.href = url;
+    link.download = m.file.name;
+    viewer.showModal();
+  }
+  viewer.addEventListener("click", (e) => { if (!e.target.closest("a")) viewer.close(); });
 
   // The middle of a file's row: its name and size, and how far along it is
   function fileBody(m) {   // m.file: { name, type, size }; m.moved: bytes sent or received so far
@@ -372,13 +394,22 @@
     if (kind) {
       const el = document.createElement(kind);
       el.className = kind === "audio" ? "file-audio" : "file-preview";
-      if (kind === "img") el.alt = m.file.name;
-      else { el.controls = true; el.preload = "metadata"; }
+      let shown = el;
+      if (kind === "img") {
+        // A picture is a button: pressing it opens the big version. (Video has its own full-screen control.)
+        el.alt = m.file.name;
+        shown = document.createElement("button");
+        shown.type = "button";
+        shown.className = "file-open";
+        shown.title = "Show bigger";
+        shown.append(el);
+        shown.addEventListener("click", () => openViewer(m, url));
+      } else { el.controls = true; el.preload = "metadata"; }
       // Its height is only known once it has loaded: keep the newest message in view
-      el.addEventListener(kind === "img" ? "load" : "loadedmetadata", () => { if (stay) scrollToBottom(); });
-      el.addEventListener("error", () => el.remove());   // not something this browser can show: Download is enough
+      el.addEventListener(kind === "img" ? "load" : "loadedmetadata", () => { tidyInvite(); if (stay) scrollToBottom(); });
+      el.addEventListener("error", () => shown.remove());   // not something this browser can show: Download is enough
       el.src = url;
-      m.fileBox.prepend(el);
+      m.fileBox.prepend(shown);
     }
     const link = document.createElement("a");
     link.className = "download-button";

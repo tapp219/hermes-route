@@ -105,8 +105,9 @@ button.qr-code:hover {
     border-color: #00bfff;
 }
 
-.qr-dialog {
-    /*The big version: fills the window, darkened behind, with the code in the middle*/
+.qr-dialog, .viewer-dialog {
+    /*The big version: fills the window, darkened behind, with the code in the middle.
+      A picture from the chat opens the same way*/
     width: 100vw;
     height: 100vh;
     height: 100dvh;
@@ -120,7 +121,7 @@ button.qr-code:hover {
     cursor: zoom-out;
 }
 
-.qr-dialog[open] {
+.qr-dialog[open], .viewer-dialog[open] {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -128,7 +129,7 @@ button.qr-code:hover {
     gap: 18px;
 }
 
-.qr-dialog::backdrop {
+.qr-dialog::backdrop, .viewer-dialog::backdrop {
     background-color: rgba(17, 24, 32, 0.88);
 }
 
@@ -138,12 +139,32 @@ button.qr-code:hover {
     cursor: zoom-out;
 }
 
-.qr-big-hint {
+.qr-big-hint, .viewer-hint {
     max-width: 620px;
     margin: 0;
     color: #e6edf0;
     font-size: 18px;
     text-align: center;
+}
+
+.viewer-picture {
+    /*As big as the window allows, leaving room for its name underneath*/
+    max-width: 100%;
+    max-height: calc(100% - 110px);
+    object-fit: contain;
+    border-radius: 6px;
+}
+
+.viewer-caption {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px 14px;
+    max-width: 100%;
+    margin: 0;
+    color: #e6edf0;
+    overflow-wrap: anywhere;
 }
 
 .qr-code svg {
@@ -437,6 +458,27 @@ button:focus-visible, a:focus-visible {
     border-radius: 6px;
 }
 
+.file-open {
+    /*A picture is a button: pressing it opens the big version*/
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    margin: 2px 0 8px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    cursor: zoom-in;
+}
+
+.file-open .file-preview {
+    margin: 0;
+}
+
+.file-open:hover .file-preview {
+    opacity: 0.9;
+}
+
 .file-audio {
     display: block;
     width: 100%;
@@ -535,6 +577,37 @@ button:focus-visible, a:focus-visible {
 
     .invite-title {
         font-size: 20px;
+    }
+
+    /*Once you are both connected and the messages fill their box, the invite shrinks to a small QR code
+      beside the status line, giving its room to the chat. Pressing it still opens the big code*/
+    .columns {
+        position: relative;
+    }
+
+    .invite-container.compact {
+        position: absolute;
+        top: 0;
+        right: 0;
+        display: block;
+        width: 44px;
+    }
+
+    .compact .invite-details {
+        display: none;
+    }
+
+    .compact .qr-code {
+        border-width: 2px;
+        border-radius: 6px;
+    }
+
+    .compact + .chat-column .status-line {
+        display: flex;
+        align-items: center;
+        min-height: 44px;
+        padding-right: 54px;
+        box-sizing: border-box;
     }
 
     .invite-label {

@@ -49,6 +49,12 @@
       <div class="qr-code qr-big-code"></div>
       <p class="qr-big-hint"></p>
     </dialog>
+    <!-- A picture from the chat at full size, opened by pressing it -->
+    <dialog id="viewer" class="viewer-dialog" aria-label="Picture at full size">
+      <img class="viewer-picture" alt="">
+      <p class="viewer-caption"><span class="viewer-name"></span><a class="download-button viewer-download">Download</a></p>
+      <p class="viewer-hint">Press anywhere to close.</p>
+    </dialog>
     <script src="/p2p/vendor/qrcode.js" defer></script>
     <script src="/p2p/script.js" defer></script>
   </body>
