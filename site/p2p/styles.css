@@ -1,0 +1,185 @@
+h1 {
+    /*Header*/
+    color: #00bfff
+}
+
+.invite-container {
+    /*Invite link and its copy button*/
+    max-width: 840px;
+    margin: 20px auto;
+    color: #111820;
+}
+
+.invite-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.invite-link {
+    /*Invite link, read only*/
+    flex: 1;
+    min-width: 0;
+    color: #e6edf0;
+    padding: 6px 10px;
+    font-size: 14px;
+    background-color: #111820;
+    border: 4px solid #0033ff;
+    border-radius: 8px;
+    box-sizing: border-box;
+}
+
+.copy-button {
+    /*Copy button*/
+    background-color: #0033ff;
+    color: #111820;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.status-line {
+    /*Connection status*/
+    max-width: 840px;
+    margin: 20px auto 0;
+    color: #111820;
+}
+
+.alert-box {
+    /*Warnings, hidden until there is one*/
+    max-width: 840px;
+    margin: 10px auto 0;
+    padding: 10px;
+    color: #e6edf0;
+    background-color: #111820;
+    border: 4px solid #ff3344;
+    border-radius: 8px;
+    box-sizing: border-box;
+}
+
+.input-container{
+    /*Textbox container*/
+    position: relative;
+    display: block;
+    max-width: 840px;
+    margin: 40px auto;
+}
+
+.first-textbox {
+    /*Top textbox, read only*/
+    color: #00bfff;
+    max-width: 840px;
+    width: 100%;
+    height: 250px;
+    overflow-y: auto;
+    padding: 10px;
+    font-size: 16px;
+    display: block;
+    margin: 20px auto;
+    background-color: #111820;
+    border: 4px solid #0033ff;
+    border-radius: 8px;
+    box-sizing: border-box;
+}
+
+.first-textbox p {
+    margin: 0;
+    padding: 2px 0;
+}
+
+.second-textbox {
+    /*Bottom textbox, allows typing*/
+    color: #e6edf0;
+    width: 100%;
+    height: 150px;
+    padding: 10px;
+    padding-right: 60px;
+    box-sizing: border-box;
+    font-size: 16px;
+    display: block;
+    margin: 0;
+    background-color: #111820;
+    border: 4px solid #0033ff;
+    border-radius: 8px
+}
+
+body {
+    /*Background*/
+    background-color: hsl(173, 100%, 89%);
+    color: #e6edf0;
+}
+
+.send-button {
+    /*Send button*/
+    position: absolute;
+    right: 20px;
+    bottom: 20px;
+    background-color: #0033ff;
+    color: #111820;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-left: 5px;
+}
+
+.send-button:disabled {
+    /*Send button while there is nobody connected to send to*/
+    opacity: 0.5;
+    cursor: default;
+}
+
+.bottom-row {
+    /*Rename button and new chat link, under the textboxes*/
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    max-width: 840px;
+    margin: 0 auto 20px;
+}
+
+.rename-button{
+    /*Rename button*/
+    background-color: #0033ff;
+    color: #111820;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.new-chat-link {
+    /*Start a new chat link*/
+    color: #0033ff;
+    font-size: 14px;
+}
+
+.message-row {
+    /*One chat message: name on the left, text on the right*/
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px;
+    align-items: start;
+    padding: 2px 0;
+}
+
+.message-row.other-user {
+    /*Messages from the other person*/
+    color: white;
+}
+
+.message-name {
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.message-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    min-width: 0;
+}

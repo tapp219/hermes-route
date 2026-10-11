@@ -4,7 +4,30 @@
   const $ = (id) => document.getElementById(id);
   const enc = new TextEncoder();
 
-  const log = (t) => { $("log").textContent += t + "\n"; };
+  const firstTextbox = document.querySelector(".first-textbox");
+  const secondTextbox = document.querySelector(".second-textbox");
+  const sendButton = document.querySelector(".send-button");
+  const renameButton = document.querySelector(".rename-button");
+  // Names shown next to messages. They are labels on this screen only; nothing is sent to the other person.
+  let userName = "User";
+  let otherUserName = "Other User";
+
+  // Adds one message to the top textbox: the name in one column, the text in the other
+  function addMessage(name, text, mine) {
+    const messageElement = document.createElement("div");
+    messageElement.className = mine ? "message-row" : "message-row other-user";
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "message-name";
+    nameSpan.textContent = name + ": ";
+    const textSpan = document.createElement("span");
+    textSpan.className = "message-text";
+    textSpan.textContent = text;
+    messageElement.appendChild(nameSpan);
+    messageElement.appendChild(textSpan);
+    firstTextbox.appendChild(messageElement);
+    firstTextbox.scrollTop = firstTextbox.scrollHeight;
+  }
+
   const setStatus = (t) => { $("status").textContent = t; };
   const showAlert = (t) => { const a = $("alert"); a.textContent = t; a.hidden = false; };
 
@@ -171,7 +194,7 @@
   let attempts = 0, retryTimer = null, pingTimer = null;
 
   const pcState = () => (pc ? pc.connectionState : "none");
-  const refreshSend = () => { $("send").disabled = !(channel && channel.readyState === "open"); };
+  const refreshSend = () => { sendButton.disabled = !(channel && channel.readyState === "open"); };
   const send = (obj) => { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); };
 
   function createPc(withRelay) {
@@ -228,7 +251,7 @@
     ch.onclose = () => { if (ch === channel) refreshSend(); };
     ch.onmessage = (e) => {
       if (ch !== channel) return;
-      log("Them: " + (typeof e.data === "string" ? e.data.slice(0, 5000) : "(binary data ignored)"));
+      addMessage(otherUserName, typeof e.data === "string" ? e.data.slice(0, 5000) : "(binary data ignored)", false);
     };
     refreshSend();
   }
@@ -452,15 +475,27 @@
 
   // ---------- Chat box ----------
   function sendChat() {
-    const input = $("msg");
-    const text = input.value;
-    if (!text || !channel || channel.readyState !== "open") return;
+    const text = secondTextbox.value;
+    if (text.trim() === "" || !channel || channel.readyState !== "open") return;
     channel.send(text);
-    log("Me: " + text);
-    input.value = "";
+    addMessage(userName, text, true);
+    secondTextbox.value = "";
   }
-  $("send").onclick = sendChat;
-  $("msg").addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat(); });
+  sendButton.addEventListener("click", sendChat);
+  // Enter sends; Shift+Enter makes a new line
+  secondTextbox.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendChat();
+    }
+  });
+
+  renameButton.addEventListener("click", () => {
+    const newUserName = prompt("Enter your name: ", userName);
+    if (newUserName !== null && newUserName.trim() !== "") userName = newUserName.trim();
+    const newOtherName = prompt("Enter other user's name: ", otherUserName);
+    if (newOtherName !== null && newOtherName.trim() !== "") otherUserName = newOtherName.trim();
+  });
 
   connect();
 })();
