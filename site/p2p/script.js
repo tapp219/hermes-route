@@ -12,7 +12,7 @@
     if (match) return match[1];
     const bytes = crypto.getRandomValues(new Uint8Array(16));
     const id = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-    history.replaceState(null, "", "/p2p/" + id);
+    history.replaceState(null, "", "/p2p/" + id + location.search);   // keep ?relay=only, so the invite link carries it too
     return id;
   }
   const roomId = getRoomId();
