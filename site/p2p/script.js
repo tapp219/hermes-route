@@ -230,6 +230,7 @@
   //   msg    a chat message, with an id, its place in line, and the time it was sent
   //   ack    "I have message <id>" (or file <id>, all of it)
   //   name   the sender changed their name
+  //   typing the sender started (on: true) or stopped (on: false) typing
   // and, for files (see "Files" further down):
   //   file   "I have a file for you": its id, place in line, time, name, type and size
   //   want   the receiver's reply: "send me file <id>, starting at byte <from>"
@@ -285,14 +286,57 @@
 
     let i = messages.length;
     while (i > 0 && comesBefore(m, messages[i - 1])) i--;
-    firstTextbox.insertBefore(messageElement, i < messages.length ? messages[i].row : null);
+    firstTextbox.insertBefore(messageElement, i < messages.length ? messages[i].row : typingRow);
     messages.splice(i, 0, m);
     tidyInvite();
     firstTextbox.scrollTop = firstTextbox.scrollHeight;
   }
 
   // A name changed: every message from that person shows the new one
-  function renderNames() { for (const m of messages) m.nameSpan.textContent = nameFor(m.mine); }
+  function renderNames() {
+    for (const m of messages) m.nameSpan.textContent = nameFor(m.mine);
+    typingRow.textContent = typingText();
+  }
+
+  // ---------- Typing indicator ----------
+  // While you type, the other person sees "<name> is typing..." as the last line of their messages box.
+  // "on" is repeated every few seconds while the typing goes on, and the other side hides the line by
+  // itself when no "on" has come for a while, so a lost "off" can't leave it showing.
+  const TYPING_IDLE_MS = 3000;     // no keys pressed for this long counts as stopped
+  const TYPING_REPEAT_MS = 3000;   // how often "on" is sent again while typing continues
+  const TYPING_SHOWN_MS = 6000;    // how long the line stays up after the last "on"
+  const typingRow = firstTextbox.querySelector(".typing-row");
+  const typingText = () => `${otherUserName || DEFAULT_OTHER_NAME} is typing...`;
+  let typingSentAt = 0, typingIdleTimer = null, typingHideTimer = null;
+
+  // The other person's side: show or hide the line
+  function showTyping(on) {
+    clearTimeout(typingHideTimer);
+    if (on) typingHideTimer = setTimeout(() => showTyping(false), TYPING_SHOWN_MS);
+    if (typingRow.hidden === !on) return;   // already showing (or hidden)
+    const stay = atBottom();
+    typingRow.textContent = typingText();
+    typingRow.hidden = !on;
+    if (stay) scrollToBottom();
+  }
+
+  // This side: tell the other person when typing starts and stops
+  function stopTyping() {
+    clearTimeout(typingIdleTimer);
+    if (!typingSentAt) return;
+    typingSentAt = 0;
+    sendFrame({ t: "typing", on: false });
+  }
+  function noteTyping() {
+    if (!canSend()) return;
+    if (secondTextbox.value.trim() === "") { stopTyping(); return; }   // everything deleted
+    if (Date.now() - typingSentAt > TYPING_REPEAT_MS) {
+      typingSentAt = Date.now();
+      sendFrame({ t: "typing", on: true });
+    }
+    clearTimeout(typingIdleTimer);
+    typingIdleTimer = setTimeout(stopTyping, TYPING_IDLE_MS);
+  }
 
   // ---------- Files ----------
   // A file is a message like any other (same counter, same place in line on both screens), but its
@@ -642,7 +686,7 @@
       refreshSend();
       showConnected();
     };
-    ch.onclose = () => { if (ch === channel) refreshSend(); };
+    ch.onclose = () => { if (ch === channel) { showTyping(false); typingSentAt = 0; refreshSend(); } };
     ch.onmessage = (e) => {
       if (ch !== channel) return;
       if (typeof e.data === "string") onFrame(e.data);
@@ -680,6 +724,8 @@
       for (const m of incoming.values()) m.stalled = true;
       for (const frame of outbox.values()) sendFrame(frame);   // whatever the last connection dropped
       refreshSend();
+    } else if (f.t === "typing") {
+      if (typeof f.on === "boolean") showTyping(f.on);
     } else if (f.t === "name") {
       otherUserName = cleanName(f.name) || otherUserName;
       renderNames();
@@ -688,12 +734,14 @@
     } else if (f.t === "msg") {
       if (!isStr(f.id, 64) || !validClock(f.clock) || typeof f.text !== "string" || !Number.isFinite(f.ts)) return;
       sendFrame({ t: "ack", id: f.id });   // also for a repeat: the earlier confirmation may be what got lost
+      showTyping(false);
       if (seen.has(f.id)) return;
       seen.add(f.id);
       clock = Math.max(clock, f.clock);
       // A time later than this device's own "now" can only be the other device's clock running fast
       addMessage({ id: f.id, mine: false, clock: f.clock, ts: Math.min(f.ts, Date.now()), text: f.text.slice(0, 5000) });
     } else if (f.t === "file") {
+      showTyping(false);
       onFileOffer(f);
     } else if (f.t === "want") {
       const m = isStr(f.id, 64) ? outgoing.get(f.id) : null;
@@ -938,6 +986,7 @@
     const m = { id: frame.id, mine: true, clock: frame.clock, ts: frame.ts, text };
     addMessage(m);
     sendFrame(frame);
+    stopTyping();
     // Normally confirmed within a moment. If not (the connection just dropped), say so until it is.
     setTimeout(() => {
       if (!outbox.has(m.id)) return;
@@ -947,6 +996,7 @@
     secondTextbox.value = "";
   }
   sendButton.addEventListener("click", sendChat);
+  secondTextbox.addEventListener("input", noteTyping);
   // Enter sends; Shift+Enter makes a new line
   secondTextbox.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
