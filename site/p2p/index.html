@@ -18,21 +18,36 @@
             <a class="new-chat-link" href="/p2p/">New chat</a>
           </div>
         </header>
-        <div class="invite-container">
-          <label for="link">Invite link (contains a secret, so share it privately):</label>
-          <div class="invite-row">
-            <input id="link" class="invite-link" readonly>
-            <button id="copy" class="copy-button">Copy</button>
+        <div class="columns">
+          <aside class="invite-container">
+            <button id="qr" class="qr-code" type="button" aria-label="QR code of the invite link. Press to make it bigger."></button>
+            <div class="invite-details">
+              <p class="invite-title">Scan to join</p>
+              <label for="link" class="invite-label">Or send the invite link. It contains a secret, so share it privately.</label>
+              <div class="invite-row">
+                <input id="link" class="invite-link" readonly>
+                <button id="copy" class="copy-button">Copy</button>
+              </div>
+              <p class="invite-joined">You are both here. This link now only works in your two browsers.</p>
+            </div>
+          </aside>
+          <div class="chat-column">
+            <p id="status" class="status-line">Starting...</p>
+            <p id="alert" class="alert-box" hidden></p>
+            <div class="first-textbox"></div>
+            <div class="input-container">
+              <textarea class="second-textbox" placeholder="Enter a chat..." maxlength="2000"></textarea>
+              <button class="send-button" disabled>Send</button>
+            </div>
           </div>
         </div>
-        <p id="status" class="status-line">Starting...</p>
-        <p id="alert" class="alert-box" hidden></p>
-        <div class="first-textbox"></div>
-        <div class="input-container">
-          <textarea class="second-textbox" placeholder="Enter a chat..." maxlength="2000"></textarea>
-          <button class="send-button" disabled>Send</button>
-        </div>
     </main>
+    <!-- The QR code at full size, opened by pressing the small one -->
+    <dialog id="qr-big" class="qr-dialog" aria-label="QR code of the invite link">
+      <div class="qr-code qr-big-code"></div>
+      <p class="qr-big-hint"></p>
+    </dialog>
+    <script src="/p2p/vendor/qrcode.js" defer></script>
     <script src="/p2p/script.js" defer></script>
   </body>
 </html>

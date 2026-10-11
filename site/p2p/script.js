@@ -97,8 +97,54 @@
     clearTimeout(copyTimer);
     copyTimer = setTimeout(() => { $("copy").textContent = "Copy"; }, 1500);
   }, () => { $("link").select(); });
-  // The link only ever works for two browsers, so once the other person has joined there is nothing left to share
-  const hideInvite = () => { document.querySelector(".invite-container").hidden = true; };
+  // The link only ever works for two browsers, so once the other person has joined there is nothing left to
+  // share: the link and Copy button give way to a note saying so (styles.css does the hiding)
+  const hideInvite = () => { document.querySelector(".invite-container").classList.add("joined"); };
+
+  // ---------- QR code of the invite link ----------
+  // Drawn as two shapes so styles.css can colour them: the three corner squares, and everything else
+  function drawQr() {
+    const holder = $("qr");
+    if (typeof qrcode !== "function") { holder.hidden = true; return; }   // vendor/qrcode.js didn't load
+    const qr = qrcode(0, "L");   // 0 = smallest size that fits the link; L = fewest, biggest squares
+    qr.addData(location.href, "Byte");
+    qr.make();
+    const n = qr.getModuleCount();
+    const inCorner = (r, c) => (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7);
+    let corners = "", rest = "";
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (!qr.isDark(r, c)) continue;
+        if (inCorner(r, c)) corners += `M${c} ${r}h1v1h-1z`;
+        else rest += `M${c} ${r}h1v1h-1z`;
+      }
+    }
+    const SVG = "http://www.w3.org/2000/svg";
+    const margin = 2;   // the white box around the code supplies the rest of the blank border scanners need
+    const svg = document.createElementNS(SVG, "svg");
+    svg.setAttribute("viewBox", `${-margin} ${-margin} ${n + 2 * margin} ${n + 2 * margin}`);
+    svg.setAttribute("shape-rendering", "crispEdges");
+    for (const [cls, d] of [["qr-squares", rest], ["qr-corners", corners]]) {
+      const path = document.createElementNS(SVG, "path");
+      path.setAttribute("class", cls);
+      path.setAttribute("d", d);
+      svg.appendChild(path);
+    }
+    holder.replaceChildren(svg);
+
+    // Pressing the code opens it much bigger, so someone else can scan it from further away.
+    // Pressing anywhere (or Esc) closes it again.
+    const big = $("qr-big");
+    big.querySelector(".qr-big-code").replaceChildren(svg.cloneNode(true));
+    holder.addEventListener("click", () => {
+      const joined = document.querySelector(".invite-container").classList.contains("joined");
+      big.querySelector(".qr-big-hint").textContent =
+        (joined ? "You are both here, so this link now only works in your two browsers." : "Scan to join this chat.") + " Press anywhere to close.";
+      big.showModal();
+    });
+    big.addEventListener("click", () => big.close());
+  }
+  drawQr();
 
   const secretBytes = /^[A-Za-z0-9_-]{43}$/.test(secretStr) ? b64urlToBytes(secretStr) : null;
   const hmacKey = secretBytes
