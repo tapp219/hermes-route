@@ -392,6 +392,11 @@
 
       case "request-offer":
         peerOnline = true;
+        // The other side asks again when its attempt has failed. If our last offer is more than a moment
+        // old and still not connected, direct has had its chance: bring in the relay now instead of
+        // starting the direct-only window over. (The request a peer sends as it joins arrives right on
+        // top of our first offer, so it doesn't count.)
+        if (mySlot === 0 && relayServers.length && lastOfferAt && Date.now() - lastOfferAt > 3000 && pcState() !== "connected") useRelay = true;
         if (mySlot === 0) startOffer(true);
         return;
 
