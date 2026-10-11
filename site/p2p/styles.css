@@ -437,6 +437,16 @@ button:focus-visible, a:focus-visible {
     white-space: nowrap;
 }
 
+.typing-row {
+    /*"<name> is typing...", the last line of the messages box while the other person types*/
+    color: #9fb1bd;
+    font-size: 16px;
+}
+
+.typing-row[hidden] {
+    display: none;
+}
+
 .message-row.pending .message-name, .message-row.pending .message-text {
     /*A message the other person hasn't received yet*/
     opacity: 0.55;
