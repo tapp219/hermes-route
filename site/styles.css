@@ -1,1 +1,45 @@
-/* CSS File Placeholder*/
+body {
+    /*Background, same as the chat page*/
+    background-color: hsl(173, 100%, 89%);
+    color: #e6edf0;
+    margin: 0;
+}
+
+main {
+    /*Everything in one centered column*/
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+}
+
+h1 {
+    /*Header, big across the top*/
+    color: #00bfff;
+    font-size: clamp(48px, 13vw, 140px);
+    line-height: 1.1;
+    text-align: center;
+    margin: 0;
+}
+
+.logo {
+    /*Logo, in a box like the chat page's textboxes*/
+    width: 220px;
+    height: 220px;
+    margin: 40px 0;
+    background-color: #111820;
+    border: 4px solid #0033ff;
+    border-radius: 8px;
+    box-sizing: border-box;
+}
+
+.start-button {
+    /*Start messaging button, a larger version of the chat page's buttons*/
+    background-color: #0033ff;
+    color: #111820;
+    border-radius: 4px;
+    padding: 14px 32px;
+    cursor: pointer;
+    font-size: 24px;
+    text-decoration: none;
+}
