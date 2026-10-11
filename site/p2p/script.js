@@ -26,7 +26,7 @@
   const isStr = (v, max) => typeof v === "string" && v.length > 0 && v.length <= max;
 
   // ---------- IndexedDB: one record per room ----------
-  // { room, priv (non-extractable CryptoKey), pub (base64 SPKI), peerPub, lastActive }
+  // { room, priv (non-extractable CryptoKey), pub (base64 SPKI), peerPub, lastActive, name (if one was chosen) }
   const idb = new Promise((resolve, reject) => {
     const req = indexedDB.open("p2p-identities", 1);
     req.onupgradeneeded = () => req.result.createObjectStore("rooms", { keyPath: "room" });
@@ -220,8 +220,9 @@
   const DEFAULT_NAME = "You", DEFAULT_OTHER_NAME = "Anonymous";
   const cleanName = (v) => (typeof v === "string" ? v.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 30) : "");
   // Each person picks their own name, which the other person sees too. "" until one is chosen.
-  // Names live only in this page's memory: nothing is saved, so a reload starts without one.
-  let userName = "";
+  // Your name is kept in this chat's identity record, so it survives a reload, is never carried into
+  // another chat, and is deleted along with the record after an hour of inactivity.
+  let userName = cleanName(rec.name);
   let otherUserName = "";
 
   // Message order. When both people press Send at the same moment, each message reaches the other screen
@@ -652,6 +653,8 @@
     const newUserName = cleanName(prompt("Enter your name: ", userName));
     if (newUserName === "") return;   // cancelled, or left blank
     userName = newUserName;
+    rec.name = userName;
+    touch();   // saves the record
     renderNames();
     if (peerReady) sendFrame({ t: "name", name: userName });   // otherwise the hello carries it when the connection opens
   });
