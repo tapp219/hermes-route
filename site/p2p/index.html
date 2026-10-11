@@ -4,13 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="no-referrer">
+    <meta name="theme-color" content="#c7fff8">
     <title>Hermes Route</title>
     <link rel="stylesheet" href="/p2p/styles.css">
     <link rel="icon" href="/assets/favicon/favicon.ico" type="image/x-icon">
   </head>
   <body>
     <main>
-        <h1>Welcome to Hermes Route</h1>
+        <header class="top-bar">
+          <h1><a href="/"><img class="brand" src="/assets/site-colors/hermes-route-lockup.svg" alt="Hermes Route" width="1270" height="246"></a></h1>
+          <div class="top-buttons">
+            <button class="rename-button">Rename</button>
+            <a class="new-chat-link" href="/p2p/">New chat</a>
+          </div>
+        </header>
         <div class="invite-container">
           <label for="link">Invite link (contains a secret, so share it privately):</label>
           <div class="invite-row">
@@ -24,10 +31,6 @@
         <div class="input-container">
           <textarea class="second-textbox" placeholder="Enter a chat..." maxlength="2000"></textarea>
           <button class="send-button" disabled>Send</button>
-        </div>
-        <div class="bottom-row">
-          <button class="rename-button">Rename</button>
-          <a class="new-chat-link" href="/p2p/">Start a new chat</a>
         </div>
     </main>
     <script src="/p2p/script.js" defer></script>

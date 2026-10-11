@@ -1,12 +1,75 @@
+/*Zilla Slab, the site's font. The files are in assets/fonts so nothing is loaded from another site*/
+@font-face {
+    font-family: "Zilla Slab";
+    font-weight: 400;
+    font-display: swap;
+    src: url("/assets/fonts/zilla-slab-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Zilla Slab";
+    font-weight: 700;
+    font-display: swap;
+    src: url("/assets/fonts/zilla-slab-latin-700-normal.woff2") format("woff2");
+}
+
+body {
+    /*Background*/
+    background-color: hsl(173, 100%, 89%);
+    color: #111820;
+    font-family: "Zilla Slab", Rockwell, "Roboto Slab", Georgia, serif;
+    font-size: 18px;
+    margin: 0;
+}
+
+button, input, textarea {
+    /*Same font in the buttons and textboxes as everywhere else*/
+    font-family: inherit;
+}
+
+main {
+    /*One column as tall as the window; the top textbox takes whatever height is left over*/
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 840px;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 440px;
+    margin: 0 auto;
+    padding: 16px 20px 20px;
+    box-sizing: border-box;
+}
+
+.top-bar {
+    /*Logo on the left, Rename and New chat on the right*/
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+}
+
 h1 {
-    /*Header*/
-    color: #00bfff
+    /*Header: the logo, which is also the way back to the home page*/
+    margin: 0;
+    font-size: 0;
+}
+
+.brand {
+    display: block;
+    width: auto;
+    height: 52px;
+}
+
+.top-buttons {
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
 
 .invite-container {
-    /*Invite link and its copy button*/
-    max-width: 840px;
-    margin: 20px auto;
+    /*Invite link and its copy button. Goes away once the other person has joined*/
     color: #111820;
 }
 
@@ -22,7 +85,7 @@ h1 {
     min-width: 0;
     color: #e6edf0;
     padding: 6px 10px;
-    font-size: 14px;
+    font-size: 16px;
     background-color: #111820;
     border: 4px solid #0033ff;
     border-radius: 8px;
@@ -31,26 +94,26 @@ h1 {
 
 .copy-button {
     /*Copy button*/
+    min-width: 84px;
     background-color: #0033ff;
-    color: #111820;
+    color: #ffffff;
     border: none;
     border-radius: 4px;
-    padding: 6px 12px;
+    padding: 6px 14px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 16px;
+    font-weight: 700;
 }
 
 .status-line {
     /*Connection status*/
-    max-width: 840px;
-    margin: 20px auto 0;
+    margin: 0;
     color: #111820;
 }
 
 .alert-box {
     /*Warnings, hidden until there is one*/
-    max-width: 840px;
-    margin: 10px auto 0;
+    margin: 0;
     padding: 10px;
     color: #e6edf0;
     background-color: #111820;
@@ -63,21 +126,17 @@ h1 {
     /*Textbox container*/
     position: relative;
     display: block;
-    max-width: 840px;
-    margin: 40px auto;
 }
 
 .first-textbox {
     /*Top textbox, read only*/
     color: #00bfff;
-    max-width: 840px;
-    width: 100%;
-    height: 250px;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
-    padding: 10px;
-    font-size: 16px;
+    padding: 10px 12px;
+    font-size: 18px;
     display: block;
-    margin: 20px auto;
     background-color: #111820;
     border: 4px solid #0033ff;
     border-radius: 8px;
@@ -93,37 +152,43 @@ h1 {
     /*Bottom textbox, allows typing*/
     color: #e6edf0;
     width: 100%;
-    height: 150px;
-    padding: 10px;
-    padding-right: 60px;
+    height: 120px;
+    padding: 10px 12px;
+    padding-right: 96px;
     box-sizing: border-box;
-    font-size: 16px;
+    font-size: 18px;
     display: block;
     margin: 0;
+    resize: none;
     background-color: #111820;
     border: 4px solid #0033ff;
     border-radius: 8px
 }
 
-body {
-    /*Background*/
-    background-color: hsl(173, 100%, 89%);
-    color: #e6edf0;
+.second-textbox::placeholder {
+    color: #9fb1bd;
+    opacity: 1;
+}
+
+.second-textbox:focus, .invite-link:focus {
+    /*The box being typed in gets the lighter blue from the messages*/
+    outline: none;
+    border-color: #00bfff;
 }
 
 .send-button {
     /*Send button*/
     position: absolute;
-    right: 20px;
-    bottom: 20px;
+    right: 16px;
+    bottom: 16px;
     background-color: #0033ff;
-    color: #111820;
+    color: #ffffff;
     border: none;
     border-radius: 4px;
-    padding: 6px 12px;
+    padding: 8px 16px;
     cursor: pointer;
-    font-size: 14px;
-    margin-left: 5px;
+    font-size: 16px;
+    font-weight: 700;
 }
 
 .send-button:disabled {
@@ -132,40 +197,52 @@ body {
     cursor: default;
 }
 
-.bottom-row {
-    /*Rename button and new chat link, under the textboxes*/
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 20px;
-    max-width: 840px;
-    margin: 0 auto 20px;
-}
-
 .rename-button{
     /*Rename button*/
     background-color: #0033ff;
-    color: #111820;
+    color: #ffffff;
     border: none;
     border-radius: 4px;
-    padding: 6px 12px;
+    padding: 6px 14px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 16px;
+    font-weight: 700;
 }
 
 .new-chat-link {
     /*Start a new chat link*/
     color: #0033ff;
-    font-size: 14px;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+/*Buttons react when pointed at and when pressed*/
+.send-button:hover:enabled, .copy-button:hover, .rename-button:hover {
+    background-color: #1f4dff;
+}
+
+.send-button:active:enabled, .copy-button:active, .rename-button:active {
+    transform: translateY(1px);
+}
+
+/*Moving around with the keyboard shows where you are*/
+button:focus-visible, a:focus-visible {
+    outline: 3px solid #00bfff;
+    outline-offset: 2px;
+}
+
+.top-bar :focus-visible, .copy-button:focus-visible {
+    outline-color: #111820;
 }
 
 .message-row {
     /*One chat message: name on the left, text on the right*/
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: 6px;
+    gap: 8px;
     align-items: start;
-    padding: 2px 0;
+    padding: 3px 0;
+    line-height: 1.3;
 }
 
 .message-row.other-user {
@@ -182,4 +259,40 @@ body {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     min-width: 0;
+}
+
+@media (max-width: 600px) {
+    /*Phone held upright: less padding, a shorter typing box, and bigger buttons for thumbs*/
+    main {
+        gap: 10px;
+        min-height: 380px;
+        padding: 10px 12px 12px;
+    }
+
+    .brand {
+        height: 34px;
+    }
+
+    .top-buttons {
+        gap: 12px;
+    }
+
+    .rename-button, .copy-button {
+        padding: 8px 12px;
+    }
+
+    .invite-container, .status-line {
+        font-size: 16px;
+    }
+
+    .second-textbox {
+        height: 92px;
+        padding-right: 88px;
+    }
+
+    .send-button {
+        right: 12px;
+        bottom: 12px;
+        padding: 10px 16px;
+    }
 }

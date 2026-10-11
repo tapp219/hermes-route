@@ -1,32 +1,56 @@
+/*Zilla Slab, the site's font. The files are in assets/fonts so nothing is loaded from another site*/
+@font-face {
+    font-family: "Zilla Slab";
+    font-weight: 400;
+    font-display: swap;
+    src: url("/assets/fonts/zilla-slab-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Zilla Slab";
+    font-weight: 700;
+    font-display: swap;
+    src: url("/assets/fonts/zilla-slab-latin-700-normal.woff2") format("woff2");
+}
+
 body {
     /*Background, same as the chat page*/
     background-color: hsl(173, 100%, 89%);
-    color: #e6edf0;
+    color: #111820;
+    font-family: "Zilla Slab", Rockwell, "Roboto Slab", Georgia, serif;
     margin: 0;
 }
 
 main {
-    /*Everything in one centered column*/
+    /*Everything in one column, in the middle of the window*/
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 40px 20px;
+    justify-content: center;
+    gap: 48px;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 32px 24px;
+    box-sizing: border-box;
 }
 
 h1 {
-    /*Header, big across the top*/
-    color: #00bfff;
-    font-size: clamp(48px, 13vw, 140px);
-    line-height: 1.1;
-    text-align: center;
+    /*Header: the name, big across the top*/
+    width: 100%;
+    max-width: 900px;
     margin: 0;
+}
+
+.wordmark {
+    display: block;
+    width: 100%;
+    height: auto;
 }
 
 .logo {
     /*Logo, in a box like the chat page's textboxes*/
     width: 220px;
     height: 220px;
-    margin: 40px 0;
     background-color: #111820;
     border: 4px solid #0033ff;
     border-radius: 8px;
@@ -36,10 +60,130 @@ h1 {
 .start-button {
     /*Start messaging button, a larger version of the chat page's buttons*/
     background-color: #0033ff;
-    color: #111820;
+    color: #ffffff;
     border-radius: 4px;
-    padding: 14px 32px;
+    padding: 14px 36px;
     cursor: pointer;
-    font-size: 24px;
+    font-size: 26px;
+    font-weight: 700;
+    text-align: center;
     text-decoration: none;
+    box-sizing: border-box;
+}
+
+.start-button:hover {
+    background-color: #1f4dff;
+}
+
+.start-button:active {
+    /*Pressed in*/
+    transform: translateY(2px);
+}
+
+.start-button:focus-visible {
+    outline: 3px solid #111820;
+    outline-offset: 3px;
+}
+
+.about {
+    /*What this is and how it works, under the button*/
+    width: 100%;
+    max-width: 900px;
+    font-size: 19px;
+    line-height: 1.4;
+}
+
+.about-intro {
+    max-width: 640px;
+    margin: 0 auto;
+    font-size: 22px;
+    text-align: center;
+}
+
+h2 {
+    margin: 44px 0 16px;
+    font-size: 28px;
+    text-align: center;
+}
+
+.steps {
+    /*The three steps, side by side, each in a box like the chat page's textboxes*/
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: step;
+}
+
+.steps li {
+    counter-increment: step;
+    padding: 16px 18px 18px;
+    color: #e6edf0;
+    background-color: #111820;
+    border: 4px solid #0033ff;
+    border-radius: 8px;
+}
+
+.steps li::before {
+    /*The step's number, in the light blue from the chat messages*/
+    content: counter(step);
+    display: block;
+    color: #00bfff;
+    font-size: 40px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+h3 {
+    margin: 10px 0 6px;
+    color: #ffffff;
+    font-size: 22px;
+}
+
+.steps p {
+    margin: 0;
+}
+
+.about-note {
+    max-width: 720px;
+    margin: 28px auto 0;
+    font-size: 17px;
+    text-align: center;
+}
+
+@media (max-width: 600px) {
+    /*Phone held upright: the name on two lines, and a button wide enough for a thumb*/
+    main {
+        gap: 40px;
+    }
+
+    h1 {
+        max-width: 300px;
+    }
+
+    .logo {
+        width: 200px;
+        height: 200px;
+    }
+
+    .start-button {
+        width: 100%;
+        max-width: 300px;
+        padding: 16px 20px;
+    }
+
+    .about {
+        font-size: 18px;
+    }
+
+    .about-intro {
+        font-size: 20px;
+    }
+
+    .steps {
+        /*The three steps one under another*/
+        grid-template-columns: 1fr;
+    }
 }

@@ -44,3 +44,21 @@ to outlines, so no font is needed to display the files.
 <meta property="og:image" content="https://YOUR-DOMAIN/og-image.png">
 <meta name="theme-color" content="#111820">
 ```
+
+## Site colours and font
+
+`site-colors/` holds the versions the website itself uses. They are the same drawings as
+above with the inks swapped for the site's own colours: `#111820` for the lines and
+"Hermes", electric blue `#0033FF` for the wing and "Route" on the mint background, and
+light blue `#00BFFF` for the wing on dark boxes.
+
+| File | Use |
+|---|---|
+| `site-colors/hermes-route-wordmark.svg` | The name on one line: the home page title. |
+| `site-colors/hermes-route-wordmark-two-lines.svg` | The name on two lines: the home page title on a phone. |
+| `site-colors/hermes-route-lockup.svg` | Symbol and name, margins cropped: the chat page header. |
+| `site-colors/hermes-route-symbol-on-dark.svg` | Symbol alone: the dark logo box on the home page. |
+
+`fonts/` holds Zilla Slab (Regular and Bold, Latin characters), the font for all text on
+the site. It is served from here rather than from a font service, so the pages load
+nothing from other sites. Licensed under the SIL Open Font License; see `fonts/OFL.txt`.

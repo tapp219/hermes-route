@@ -90,7 +90,15 @@
     mayCreate = true;
   }
   $("link").value = location.href;
-  $("copy").onclick = () => navigator.clipboard.writeText(location.href).then(() => setStatus("Link copied."), () => {});
+  // The Copy button says "Copied!" for a moment. If the browser won't copy, the link is selected to copy by hand.
+  let copyTimer = null;
+  $("copy").onclick = () => navigator.clipboard.writeText(location.href).then(() => {
+    $("copy").textContent = "Copied!";
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => { $("copy").textContent = "Copy"; }, 1500);
+  }, () => { $("link").select(); });
+  // The link only ever works for two browsers, so once the other person has joined there is nothing left to share
+  const hideInvite = () => { document.querySelector(".invite-container").hidden = true; };
 
   const secretBytes = /^[A-Za-z0-9_-]{43}$/.test(secretStr) ? b64urlToBytes(secretStr) : null;
   const hmacKey = secretBytes
@@ -125,6 +133,8 @@
     showAlert("This invite link is missing its secret (the part after #). Ask for the full link, or start a new chat.");
     return;
   }
+
+  if (rec.peerPub) hideInvite();
 
   const touch = () => { rec.lastActive = Date.now(); idbPut(rec).catch(() => {}); };
 
@@ -165,6 +175,7 @@
     }
     rec.peerPub = env.pub;
     await idbPut(rec);
+    hideInvite();
     return true;
   }
 
@@ -368,7 +379,7 @@
         // Say so instead of silently dropping the person into a different, empty chat
         idbDelete(room).catch(() => {});
         setStatus("This chat is gone.");
-        showAlert("The server no longer knows this chat (it expired or restarted). Use \"Start a new chat\" below and share the new link.");
+        showAlert("The server no longer knows this chat (it expired or restarted). Use \"New chat\" at the top and share the new link.");
       }
     } else if (reason === "sealed") {
       setStatus("Can't join.");

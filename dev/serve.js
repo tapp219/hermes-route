@@ -30,6 +30,7 @@ const P2P_PORT = Number(process.env.P2P_PORT) || 9000;
 const TYPES = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".json": "application/json",
+  ".woff2": "font/woff2",
 };
 
 if (!fs.existsSync(path.join(signalDir, "node_modules"))) {
