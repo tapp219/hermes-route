@@ -132,15 +132,31 @@ function parsePublicKey(b64) {
 
 const isStr = (v, max) => typeof v === "string" && v.length > 0 && v.length <= max;
 
+// The relay runs on the same machine as this site, so its address is whatever the browser used
+// to reach us (the Host header), which keeps any address out of the config. null if it looks odd.
+function relayHost(req) {
+  const host = String(req.headers.host || "").replace(/:\d+$/, "");
+  return /^[A-Za-z0-9.-]+$/.test(host) ? host : null;
+}
+
+// Address lookups (STUN), so each browser can learn its public address for a direct connection.
+// The relay server answers these too, so browsers ask our own server instead of a third party
+// (which would learn every visitor's IP address). No login needed. Only offered when a relay is
+// set up (TURN_SECRET), since that is when the relay server is running.
+function stunServersFor(req) {
+  if (!TURN_SECRET) return undefined;
+  const host = relayHost(req);
+  if (!host) return undefined;
+  return [{ urls: `stun:${host}:${TURN_PORT}` }];
+}
+
 // Relay logins, for when the two networks allow no direct connection. This is coturn's
 // "use-auth-secret" scheme: the username is an expiry time and the password is an HMAC of it
 // with the shared secret, so nothing is stored and the relay checks the same sum.
-// The relay runs on the same machine as this site, so its address is whatever the browser used
-// to reach us (the Host header), which keeps any address out of the config.
 function relayServersFor(req) {
   if (!TURN_SECRET) return undefined;
-  const host = String(req.headers.host || "").replace(/:\d+$/, "");
-  if (!/^[A-Za-z0-9.-]+$/.test(host)) return undefined;
+  const host = relayHost(req);
+  if (!host) return undefined;
   const username = `${Math.floor(Date.now() / 1000) + TURN_TTL_S}:hermes`;
   const credential = crypto.createHmac("sha1", TURN_SECRET).update(username).digest("base64");
   return [{
@@ -258,7 +274,7 @@ wss.on("connection", (ws, req) => {
 
         const other = room.sockets[1 - slot];
         // Only a browser that has proved its identity for this room gets a relay login
-        send(ws, { type: "joined", slot, peerOnline: !!other, iceServers: relayServersFor(req) });
+        send(ws, { type: "joined", slot, peerOnline: !!other, iceServers: relayServersFor(req), stunServers: stunServersFor(req) });
         if (other) send(other, { type: "peer-online" });
         return;
       }

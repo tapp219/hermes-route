@@ -542,7 +542,10 @@
   }
 
   // ---------- WebRTC state ----------
-  const stunServers = [{ urls: "stun:stun.l.google.com:19302" }];
+  // Our own server's address lookup (STUN), filled in by the server when it has a relay. It lets each browser
+  // learn its public address for a direct connection without telling a third party. Empty when running
+  // locally, where two browsers on the same computer or network connect without it.
+  let stunServers = [];
   // Filled in by the server when it has a relay: used only if no direct route works
   let relayServers = [];
   // Opening the link with ?relay=only sends everything through the relay, to check the relay itself
@@ -839,6 +842,7 @@
 
       case "joined":
         if (Array.isArray(msg.iceServers)) relayServers = msg.iceServers;
+        if (Array.isArray(msg.stunServers)) stunServers = msg.stunServers;
         authed = true;
         attempts = 0;
         mayCreate = false;
