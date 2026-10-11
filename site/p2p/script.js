@@ -155,8 +155,13 @@
   let relayServers = [];
   // Opening the link with ?relay=only sends everything through the relay, to check the relay itself
   const relayOnly = new URLSearchParams(location.search).get("relay") === "only";
-  const rtcConfig = () => ({
-    iceServers: [...stunServers, ...relayServers],
+  // Direct first: an attempt starts without the relay, and the relay is only brought in if nothing
+  // connects within this long. (Offering both at once lets the relay route win the race even when a
+  // direct one exists, because all the addresses are sent together.)
+  const DIRECT_FIRST_MS = 8000;
+  let useRelay = false;
+  const rtcConfig = (withRelay) => ({
+    iceServers: [...stunServers, ...(withRelay ? relayServers : [])],
     iceTransportPolicy: relayOnly ? "relay" : "all",
   });
   const ALIVE = new Set(["connecting", "connected", "disconnected"]);
@@ -169,7 +174,7 @@
   const refreshSend = () => { $("send").disabled = !(channel && channel.readyState === "open"); };
   const send = (obj) => { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); };
 
-  function createPc() {
+  function createPc(withRelay) {
     if (pc) {
       const old = pc;
       old.onconnectionstatechange = null;
@@ -177,7 +182,8 @@
       old.close();
     }
     channel = null;
-    const p = new RTCPeerConnection(rtcConfig());
+    currentSid = null;   // an answer to an offer from the previous connection must not be applied to this one
+    const p = new RTCPeerConnection(rtcConfig(withRelay));
     pc = p;
     p.onconnectionstatechange = () => { if (p === pc) onPcState(p.connectionState); };
     p.ondatachannel = (e) => { if (p === pc && !channel) setupChannel(e.channel); };
@@ -245,10 +251,15 @@
   }
 
   function onPcState(state) {
-    if (state === "connected") showConnected();
-    else if (state === "connecting") setStatus("Connecting...");
+    if (state === "connected") { useRelay = false; showConnected(); }   // a later reconnect starts with direct again
+    else if (state === "connecting") setStatus(useRelay && !relayOnly ? "No direct route yet. Trying through the relay..." : "Connecting...");
     else if (state === "disconnected") setStatus("Connection interrupted...");
-    else if (state === "failed") { setStatus("Connection lost. Reconnecting..."); refreshSend(); recover(); }
+    else if (state === "failed") {
+      if (relayServers.length) useRelay = true;
+      setStatus("Connection lost. Reconnecting...");
+      refreshSend();
+      recover();
+    }
     if (state !== "connected") refreshSend();
   }
 
@@ -259,7 +270,8 @@
     if (!force && ALIVE.has(pcState())) return;
     lastOfferAt = Date.now();
 
-    const p = createPc();
+    const withRelay = relayOnly || useRelay;
+    const p = createPc(withRelay);
     setupChannel(p.createDataChannel("chat"));
     await p.setLocalDescription(await p.createOffer());
     await gatherComplete(p, 4000);
@@ -271,10 +283,19 @@
     const env = { sid, pub: rec.pub, sdp, sig: await signStr(offerPayload(sid, rec.pub, sdp)), mac: await makeMac() };
     if (p !== pc) return;
     send({ type: "offer", env });
-    setStatus("Connecting...");
+    setStatus(useRelay && !relayOnly ? "No direct route yet. Trying through the relay..." : "Connecting...");
 
-    // If nothing connects within 20s, try again with a fresh offer
-    setTimeout(() => { if (pc === p && p.connectionState !== "connected") startOffer(true); }, 20000);
+    // A direct-only attempt gets a short window before the relay is brought in. After that, if
+    // nothing connects within 20s, try again with a fresh offer.
+    const directOnly = !withRelay && relayServers.length > 0;
+    setTimeout(() => {
+      if (pc !== p || p.connectionState === "connected") return;
+      if (directOnly) {
+        useRelay = true;
+        setStatus("No direct route yet. Trying through the relay...");   // say so now; gathering relay addresses takes a moment
+      }
+      startOffer(true);
+    }, directOnly ? DIRECT_FIRST_MS : 20000);
   }
 
   async function onOffer(env) {
@@ -283,7 +304,8 @@
       showAlert("Ignored an offer with an invalid signature.");
       return;
     }
-    const p = createPc();
+    // Follow the other side: use the relay only if their offer already includes a relay address
+    const p = createPc(relayOnly || / typ relay/.test(env.sdp));
     await p.setRemoteDescription({ type: "offer", sdp: env.sdp });
     await p.setLocalDescription(await p.createAnswer());
     await gatherComplete(p, 4000);
